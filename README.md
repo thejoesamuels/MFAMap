@@ -174,6 +174,3 @@ Any modern browser supporting MSAL.js 2.x: Edge, Chrome, Firefox, Safari. Intern
 
 ---
 
-## 👏 Credits
-
-Designed and built by [Joe Samuels](https://joesamuels.co.uk) at [REDACTED](https://beaconit.co.uk).
