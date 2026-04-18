@@ -1,147 +1,130 @@
-# 🎯 EnrolWatch
+# ⚡ EnrolWatch
 
-**Live MFA enrolment tracker for Microsoft Entra ID drop-in sessions**
+**MFA enrolment tracker for Microsoft Entra ID drop-in sessions**
 
-EnrolWatch gives you a real-time view of MFA enrolment progress across a target group — all from a single HTML file that runs entirely in your browser. No server. No database. No data leaves the browser.
+EnrolWatch generates a self-contained HTML dashboard showing MFA enrolment progress across a target Entra group. Run the script, get a file. Open it in any browser, share it with anyone, no server required.
 
-Sign in with your Microsoft admin account, point it at an Entra group, and instantly see who has enrolled, who is partially through, and — most importantly — who still needs catching.
+Sign in once with your Microsoft admin credentials, point it at a group, and within seconds you have a clear view of who has enrolled, who is partially through, and — most importantly — who still needs catching.
 
 ---
 
 ## ✨ Key features
 
-- 🗂️ **Single file** — the entire app is one HTML file with no backend required
-- 🔑 **Delegated auth only** — authenticates as the signed-in user via MSAL.js; no application-level permissions
+- 🗂️ **Single output file** — generates one self-contained HTML file with no dependencies
+- 🔑 **Uses your existing credentials** — authenticates via `Connect-MgGraph` with your own admin account; no app registration required
 - 🎯 **Group-scoped** — targets a specific Entra group, not your entire tenant
-- 🔄 **Auto-refresh** — re-queries Microsoft Graph every 60 seconds without any page reload
-- ⚡ **Manual refresh** — instantly re-query after enrolling someone in front of you
-- 📊 **Live progress bar** — visual breakdown of complete, partial, and not-started at a glance
-- 🚨 **"Still to catch" first** — not-started users are surfaced at the top, not buried at the bottom
+- 📛 **Group name in the report** — the output file header and browser tab show the name of the group, not just an ID
+- 📁 **Auto-named output** — the HTML file is named with the group name and timestamp automatically
+- 🚨 **"Still to catch" first** — users with nothing registered are surfaced at the top
 - 🟡 **Partial enrolment detection** — users with only one method registered are called out separately
-- ✅ **Completed section collapsed** — enrolled users are tucked away so they don't distract
-- 🏢 **Works for any tenant** — configure with any tenant ID, client ID, and group ID
+- ✅ **Completed section collapsed** — fully enrolled users are tucked away so they don't distract
+- 📊 **Progress bar** — visual breakdown of complete, partial, and not-started at a glance
+- 📤 **Fully portable** — the output HTML file can be opened, shared, or emailed with no auth required
+- 🔄 **Re-run to refresh** — run the script again at any point to regenerate with fresh data
 
 ---
 
 ## 🔧 How it works
 
 ```
-Browser → MSAL.js → Microsoft Entra ID  (sign-in)
-                           ↓
-               Microsoft Graph API
-               /groups/{id}/members          (target group membership)
-               /users/{id}/authentication/methods  (per-user auth methods)
-                           ↓
-               All processing in browser memory
-               No data sent anywhere else
+.\EnrolWatch.ps1 -GroupId "your-group-id"
+        ↓
+Connect-MgGraph  (sign in with your admin account)
+        ↓
+Microsoft Graph API
+/organization                                           (tenant display name)
+/groups/{id}                                            (group name)
+/groups/{id}/members                                    (group membership)
+/users/{id}/authentication/microsoftAuthenticatorMethods  (Authenticator registration)
+/users/{id}/authentication/windowsHelloForBusinessMethods (WHfB registration)
+        ↓
+Self-contained HTML file written to disk
+enrolwatch_GroupName_2025-01-01_0900.html
+        ↓
+Open in any browser — no auth, no server, no dependencies
 ```
-
-EnrolWatch fetches the membership of your target group, then queries each member's registered authentication methods in parallel. It classifies each user as **fully enrolled** (Authenticator + WHfB), **partially enrolled** (one method only), or **not started** (nothing registered), then renders the dashboard and repeats on the configured interval.
 
 ---
 
 ## 🛡️ Permissions
 
-EnrolWatch requests three **delegated** Graph permissions. All are read-only — the app cannot make any changes to a tenant.
+EnrolWatch uses `Connect-MgGraph` with delegated permissions — it authenticates as you, using your existing admin account. No app registration is required.
 
-| Permission | Why it's needed |
+The script requests four Graph scopes at runtime:
+
+| Scope | Why it's needed |
 |---|---|
-| `User.Read` | Sign in the current user and read their basic profile |
-| `UserAuthenticationMethod.Read.All` | Read MFA registration details for all users in the group |
-| `GroupMember.Read.All` | Read the membership of the target Entra group |
+| `Group.Read.All` | Read the group name and details |
+| `GroupMember.Read.All` | Read the membership of the target group |
+| `User.Read.All` | Resolve group member IDs to user display names and UPNs |
+| `Organization.Read.All` | Read the tenant display name (via direct Graph API call — no extra module required) |
+| `UserAuthenticationMethod.Read.All` | Read MFA registration details for each user |
 
-> **Admin consent is required** before the tool can be used. A Global Administrator or Privileged Role Administrator must grant consent once. See [SETUP.md](./SETUP.md) for full instructions.
+All are read-only. The script cannot make any changes to users, groups, or authentication methods.
 
 ---
 
-## 📁 Repository structure
+## 📋 Requirements
 
-```
-enrolwatch.html       ← The entire application (single file)
-README.md             ← This file
-SETUP.md              ← Full technical setup guide
-```
+- **PowerShell 5.1+** or **PowerShell 7+**
+- **Microsoft.Graph PowerShell modules** — see Quick Start below
+- An account with at least **Authentication Administrator** or **Global Reader** role in the target tenant
 
 ---
 
 ## 🚀 Quick start
 
-Full step-by-step instructions are in [SETUP.md](./SETUP.md). The short version:
+**1. Install the required modules** (one-time, run as yourself)
 
-1. Register a single-tenant Entra app in your tenant
-2. Add the three delegated API permissions and grant admin consent
-3. Set the redirect URI to `http://localhost` (or your hosting URL)
-4. Grab your Application (client) ID, Directory (tenant) ID, and the Object ID of your target group
-5. Paste the three values into the config block at the top of `enrolwatch.html`
-6. Open the file in a browser, or serve it locally with `python -m http.server 8080`
+```powershell
+Install-Module Microsoft.Graph.Authentication -Scope CurrentUser
+Install-Module Microsoft.Graph.Groups -Scope CurrentUser
+Install-Module Microsoft.Graph.Users -Scope CurrentUser
+Install-Module Microsoft.Graph.Identity.SignIns -Scope CurrentUser
+```
+
+If prompted to trust the PSGallery repository, type `Y` and press Enter.
+
+**2. Get your group's Object ID**
+
+In [entra.microsoft.com](https://entra.microsoft.com) → **Groups** → find your group → copy the **Object ID** from the Overview page.
+
+**3. Run the script**
+
+```powershell
+.\EnrolWatch.ps1 -GroupId "your-group-object-id"
+```
+
+This will prompt you to sign in with your Microsoft admin account, then generate a timestamped HTML report in the current directory.
+
+**4. Open the report**
+
+The script prints the exact filename on completion. Open it with:
+
+```powershell
+Start-Process ".\enrolwatch_GroupName_2025-01-01_0900.html"
+```
+
+Or just double-click the file.
 
 ---
 
-## 🔒 Security
+## ⚙️ Parameters
 
-### 🌐 No data leaves the browser
+| Parameter | Required | Default | Description |
+|---|---|---|---|
+| `-GroupId` | ✅ Yes | — | Object ID of the target Entra group |
+| `-OutputPath` | No | Auto-generated | Override the output file path |
 
-EnrolWatch has no backend server. It is a static HTML file. Once your browser has downloaded the page, everything runs locally. The only network calls the app makes are directly to Microsoft's own services:
+**Examples:**
 
-- `login.microsoftonline.com` — Microsoft's authentication endpoint (sign-in)
-- `graph.microsoft.com` — the Microsoft Graph API (reading group and MFA data)
-- `alcdn.msauth.net` — Microsoft's own CDN for the MSAL.js library
-- `fonts.googleapis.com` — Google Fonts CDN for the DM Sans and JetBrains Mono typefaces
+```powershell
+# Basic — output file named automatically from group name and timestamp
+.\EnrolWatch.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00"
 
-There are no calls to any third-party infrastructure, no analytics platforms, no error reporting services, and no logging endpoints. You can verify this yourself by opening the browser Network tab (F12) while using the app and inspecting every request made.
-
-### 🔑 Delegated permissions — not application permissions
-
-EnrolWatch uses **delegated permissions** via the OAuth 2.0 authorisation code flow with PKCE. This means:
-
-- The app authenticates *as the signed-in user* — it can only see what that user is permitted to see
-- There is no background process, no scheduled job, and no way for the app to call Graph when a user is not actively signed in
-- The app has no client secret and no certificate — there is no long-lived credential that could be leaked or misused
-
-### 🔐 Why there's no client secret
-
-Single-page applications running in the browser cannot hold a secret securely — the full source code is visible to anyone who opens browser developer tools. Instead, MSAL.js 2.x uses **PKCE (Proof Key for Code Exchange)**, the industry-standard approach for public clients. PKCE generates a one-time cryptographic challenge per sign-in that prevents authorisation codes from being intercepted and replayed, providing equivalent security without any secret needing to be stored.
-
-### 💾 Token storage
-
-Access tokens are stored in the browser's `sessionStorage`. This is deliberately more restrictive than `localStorage`:
-
-- `sessionStorage` is scoped to a single browser tab — other tabs cannot access it
-- `sessionStorage` is automatically cleared when the tab is closed
-- It is not persisted to disk in the way that cookies or `localStorage` can be
-
-### 📋 What each permission actually allows
-
-**`User.Read`** — Reads the signed-in user's own profile. Used by MSAL to confirm the identity of the person who signed in. Cannot read other users' profiles or make any changes.
-
-**`UserAuthenticationMethod.Read.All`** ([Microsoft docs](https://learn.microsoft.com/en-us/graph/permissions-reference#userauthenticationmethodreadall)) — Reads the authentication methods registered by users. EnrolWatch uses this to determine which MFA methods each group member has registered. It **cannot** add, modify, or delete any authentication method for any user.
-
-**`GroupMember.Read.All`** ([Microsoft docs](https://learn.microsoft.com/en-us/graph/permissions-reference#groupmemberreadall)) — Reads the membership of groups. EnrolWatch uses this solely to retrieve the members of your configured target group. It **cannot** modify group membership, create or delete groups, or read group-owned resources.
-
-All three are **read-only** permissions. The Microsoft Graph API enforces this at the service level — there is no write path available to a delegated token scoped to these permissions regardless of what the client attempts.
-
-### 🚫 What EnrolWatch cannot do
-
-To be explicit, here is what EnrolWatch **cannot** do — by design and by the hard constraints of its permission set:
-
-- ❌ Add, modify, or delete any MFA method for any user
-- ❌ Reset or change any user's password
-- ❌ Create, disable, or delete user accounts
-- ❌ Read email, calendar, files, Teams messages, or any user content
-- ❌ Modify conditional access policies, security defaults, or any tenant configuration
-- ❌ Access users outside the configured target group
-- ❌ Run when no user is actively signed in
-- ❌ Retain any data after the browser tab is closed
-
-### 📊 Audit trail in the tenant
-
-When admin consent is granted and a user signs in, the following is recorded in the tenant's own Entra audit and sign-in logs:
-
-- The consent grant — which permissions were approved, by whom, and when
-- Each sign-in — the application name (EnrolWatch), the user's UPN, and the client IP address
-- Resource access events for each Graph API call made during the session
-
-The tenant's own security team has full visibility of when their data was accessed and by whom.
+# Custom output path
+.\EnrolWatch.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -OutputPath "C:\Reports\mfa-report.html"
+```
 
 ---
 
@@ -151,26 +134,47 @@ The tenant's own security team has full visibility of when their data was access
 |---|---|
 | Microsoft Authenticator app | ✅ Authenticator App |
 | Windows Hello for Business | ✅ Windows Hello |
-| FIDO2 security key | ✅ Windows Hello (serves the same purpose) |
-| SMS / Voice Call / Software TOTP only | ❌ Neither — user shown as **Not started** |
+| SMS / Voice Call / FIDO2 / TOTP only | ❌ Neither — user shown as **Not started** |
 
-A user is marked **Fully Enrolled** only when both Authenticator App and Windows Hello (or FIDO2) are registered. Users with only one method appear in the **Partially Enrolled** section.
+A user is marked **Fully Enrolled** only when both Authenticator App and Windows Hello for Business are registered. Users with only one method appear in the **Partially Enrolled** section.
+
+---
+
+## 🔒 Security
+
+**No data leaves your machine.** The script queries Microsoft Graph directly from your PowerShell session and writes the output to a local HTML file. No third-party services, no telemetry, no logging endpoints.
+
+**Delegated permissions only.** The script authenticates as you — if your account can only see certain users, so can the script. There are no application permissions or background processes.
+
+**The output file contains no credentials.** The generated HTML is static — it contains only the data retrieved at generation time, with no tokens, secrets, or connection strings embedded.
+
+**Treat the output file as internal data.** It contains names, email addresses, and MFA status of your users. Share it only with people who should have that information.
+
+---
+
+## 🔄 Refreshing during a session
+
+Re-run the script at any point to generate a fresh report:
+
+```powershell
+.\EnrolWatch.ps1 -GroupId "your-group-id"
+```
+
+Each run produces a new timestamped file so previous snapshots are preserved. The script stays signed in for the duration of your PowerShell session — you won't be prompted to sign in again unless the token has expired.
 
 ---
 
 ## 📦 Dependencies
 
-| Dependency | Version | How loaded |
-|---|---|---|
-| [MSAL.js](https://github.com/AzureAD/microsoft-authentication-library-for-js) | 2.38.3 | Microsoft CDN (`alcdn.msauth.net`) |
-| [DM Sans](https://fonts.google.com/specimen/DM+Sans) | Variable | Google Fonts CDN |
-| [JetBrains Mono](https://fonts.google.com/specimen/JetBrains+Mono) | Variable | Google Fonts CDN |
+| Module | Notes |
+|---|---|
+| [Microsoft.Graph.Authentication](https://www.powershellgallery.com/packages/Microsoft.Graph.Authentication) | `Connect-MgGraph` |
+| [Microsoft.Graph.Groups](https://www.powershellgallery.com/packages/Microsoft.Graph.Groups) | `Get-MgGroup`, `Get-MgGroupMember` |
+| [Microsoft.Graph.Users](https://www.powershellgallery.com/packages/Microsoft.Graph.Users) | `Get-MgUser` |
+| [Microsoft.Graph.Identity.SignIns](https://www.powershellgallery.com/packages/Microsoft.Graph.Identity.SignIns) | `Get-MgUserAuthenticationMicrosoftAuthenticatorMethod`, `Get-MgUserAuthenticationWindowsHelloForBusinessMethod` |
 
 ---
 
-## 🌐 Browser support
+## 👏 Credits
 
-Any modern browser supporting MSAL.js 2.x: Edge, Chrome, Firefox, Safari. Internet Explorer is not supported.
-
----
-
+Designed and built by [Joe Samuels](https://joesamuels.co.uk) at [REDACTED](https://beaconit.co.uk).
