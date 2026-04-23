@@ -25,6 +25,11 @@ param(
 # ── Load System.Web for HtmlEncode (must be before any function calls) ────────
 Add-Type -AssemblyName System.Web
 
+# ── Explicitly import required modules ───────────────────────────────────────
+# Only Authentication and Groups needed — all other calls use Invoke-MgGraphRequest directly
+Get-Module Microsoft.Graph.Authentication -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1 | Import-Module -Force
+Get-Module Microsoft.Graph.Groups -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1 | Import-Module -Force
+
 # ── Connect to Graph ──────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  EnrolWatch" -ForegroundColor Cyan
@@ -91,7 +96,12 @@ try {
 
     $members = foreach ($m in $memberObjects) {
         try {
-            Get-MgUser -UserId $m.Id -Property Id, DisplayName, UserPrincipalName -ErrorAction Stop
+            $response = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($m.Id)?`$select=id,displayName,userPrincipalName" -ErrorAction Stop
+            [PSCustomObject]@{
+                Id                = $response.id
+                DisplayName       = $response.displayName
+                UserPrincipalName = $response.userPrincipalName
+            }
         } catch {
             # Not a user object (e.g. nested group or device) — skip silently
         }
@@ -131,13 +141,13 @@ foreach ($member in $members) {
         $hasWHfB          = $false
 
         try {
-            $authenticatorMethods = Get-MgUserAuthenticationMicrosoftAuthenticatorMethod -UserId $member.Id -ErrorAction Stop
-            $hasAuthenticator = ($authenticatorMethods | Measure-Object).Count -gt 0
+            $authResponse = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/microsoftAuthenticatorMethods" -ErrorAction Stop
+            $hasAuthenticator = $authResponse.value.Count -gt 0
         } catch {}
 
         try {
-            $whfbMethods = Get-MgUserAuthenticationWindowsHelloForBusinessMethod -UserId $member.Id -ErrorAction Stop
-            $hasWHfB = ($whfbMethods | Measure-Object).Count -gt 0
+            $whfbResponse = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/windowsHelloForBusinessMethods" -ErrorAction Stop
+            $hasWHfB = $whfbResponse.value.Count -gt 0
         } catch {}
 
         $users += [PSCustomObject]@{
