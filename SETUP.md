@@ -1,112 +1,106 @@
-# MFA Enrolment Dashboard — Setup Guide
+# EnrolWatch — Setup Guide
 
 ## What this is
 
-A single HTML file that signs in with your Microsoft admin account, then polls Microsoft Graph every 60 seconds to track Authenticator app and Windows Hello for Business registration for everyone in a target Entra group. No server, no backend, no installation required. Open it in a browser and leave it running.
+A PowerShell script that signs into Microsoft Graph with your admin account, queries a target Entra group for MFA registration status, and generates a self-contained HTML report. No app registration, no server, no browser auth. Run the script, open the file.
+
+The output file is named automatically using the group name and a timestamp — e.g. `enrolwatch_Teaching-Staff_2025-06-01_0930.html`.
 
 ---
 
 ## Prerequisites
 
-- A Microsoft 365 admin account with at least **Authentication Administrator** or **Global Reader** role
-- Access to the **Entra ID portal** (entra.microsoft.com) to create an app registration
-- The **Object ID** of the Entra group you want to track
+- Windows with PowerShell 5.1+, or PowerShell 7+ on any platform
+- A Microsoft admin account with at least **Authentication Administrator** or **Global Reader** role in the target tenant
+- Internet access to reach Microsoft Graph
 
 ---
 
-## Step 1 — Create the App Registration
+## Step 1 — Install the required modules
 
-1. Go to [entra.microsoft.com](https://entra.microsoft.com) → **Applications** → **App registrations** → **New registration**
-2. Give it a name, e.g. `MFA Dashboard`
-3. Under **Supported account types**, select **Accounts in this organizational directory only**
-4. Under **Redirect URI**, select **Single-page application (SPA)** from the dropdown, then enter:
-   - If running the file **locally**: `http://localhost`
-   - If hosting the file on a web server: the full URL to the file (e.g. `https://yoursite.com/mfa-dashboard.html`)
-5. Click **Register**
+Open PowerShell and run the following. You only need to do this once.
 
-> **Note your Application (client) ID and Directory (tenant) ID** from the Overview page — you'll need these shortly.
-
----
-
-## Step 2 — Grant API Permissions
-
-1. In your new app registration, go to **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated permissions**
-2. Add the following three permissions:
-   - `User.Read`
-   - `UserAuthenticationMethod.Read.All`
-   - `GroupMember.Read.All`
-3. Click **Grant admin consent** (the button with the green tick) — this avoids each user being prompted to consent individually
-
-Your permissions page should show all three as **Granted** with a green tick.
-
----
-
-## Step 3 — Get your Group Object ID
-
-1. In Entra ID, go to **Groups** and find the group containing the staff you want to track
-2. Open the group and copy the **Object ID** from the Overview page
-
----
-
-## Step 4 — Configure the dashboard file
-
-Open `mfa-dashboard.html` in a text editor (Notepad, VS Code, anything works).
-
-Near the top of the file, find this block:
-
-```javascript
-const CONFIG = {
-  clientId:  "YOUR_CLIENT_ID_HERE",
-  tenantId:  "YOUR_TENANT_ID_HERE",
-  groupId:   "YOUR_GROUP_ID_HERE",
-  refreshInterval: 60
-};
+```powershell
+Install-Module Microsoft.Graph.Authentication -Scope CurrentUser
+Install-Module Microsoft.Graph.Groups -Scope CurrentUser
+Install-Module Microsoft.Graph.Users -Scope CurrentUser
+Install-Module Microsoft.Graph.Identity.SignIns -Scope CurrentUser
 ```
 
-Replace the three placeholder values with your actual IDs from the steps above. For example:
+If prompted to trust the PSGallery repository, type `Y` and press Enter.
 
-```javascript
-const CONFIG = {
-  clientId:  "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  tenantId:  "f0e1d2c3-b4a5-6789-0abc-def123456789",
-  groupId:   "11223344-5566-7788-99aa-bbccddeeff00",
-  refreshInterval: 60
-};
-```
-
-Save the file.
+> If you already have the full `Microsoft.Graph` module installed, you're good — no need to install the individual modules above.
+> 
+> The tenant display name is fetched using `Invoke-MgGraphRequest`, which is part of `Microsoft.Graph.Authentication` — no additional module required for this.
 
 ---
 
-## Step 5 — Running the dashboard
+## Step 2 — Get your group's Object ID
 
-### Option A — Open directly in a browser (simplest)
-
-Double-click the HTML file to open it. If your browser blocks the MSAL popup due to local file restrictions, use **Option B** instead.
-
-### Option B — Serve locally (recommended)
-
-If you have Python installed, open a terminal in the folder containing the file and run:
-
-```bash
-python -m http.server 8080
-```
-
-Then open `http://localhost:8080/mfa-dashboard.html` in your browser.
-
-> Make sure `http://localhost` is listed as a redirect URI in your app registration (Step 1). If using port 8080 specifically and that doesn't work, try adding `http://localhost:8080` as an additional redirect URI.
+1. Go to [entra.microsoft.com](https://entra.microsoft.com)
+2. Navigate to **Groups** and find the group containing the users you want to track
+3. Open the group and copy the **Object ID** from the Overview page
 
 ---
 
-## Using the dashboard
+## Step 3 — Run the script
 
-1. Open the file in your browser
-2. Click **Sign in with Microsoft** and sign in with your admin account
-3. The dashboard will load and begin auto-refreshing every 60 seconds
-4. Use **↺ Refresh Now** after you've enrolled someone in front of you to update immediately
-5. The **Still to Catch** section leads — these are the people with nothing registered yet
-6. **Partially Enrolled** shows staff who have one method but not the other
-7. **Fully Enrolled** is collapsed by default — click it to expand if needed
+In PowerShell, navigate to the folder containing `EnrolWatch.ps1` and run:
+
+```powershell
+.\EnrolWatch.ps1 -GroupId "your-group-object-id"
+```
+
+**Example:**
+```powershell
+.\EnrolWatch.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00"
+```
+
+The script will:
+1. Open a Microsoft sign-in window — sign in with your admin account
+2. Fetch the group name and membership
+3. Check each member's Authenticator and Windows Hello for Business registration
+4. Write a timestamped HTML report to the current directory
+
+---
+
+## Step 4 — Open the report
+
+The script prints the exact output filename on completion:
+
+```
+  Report saved to: .\enrolwatch_Teaching-Staff_2025-06-01_0930.html
+```
+
+Open it with:
+
+```powershell
+Start-Process ".\enrolwatch_Teaching-Staff_2025-06-01_0930.html"
+```
+
+Or double-click the file in Explorer / Finder. It opens in your default browser with no login required.
+
+---
+
+## Refreshing during a session
+
+Just re-run the script:
+
+```powershell
+.\EnrolWatch.ps1 -GroupId "your-group-object-id"
+```
+
+Each run produces a new timestamped file, so previous snapshots are preserved. You won't be prompted to sign in again as long as your PowerShell session is still active.
+
+---
+
+## Custom output path
+
+Use `-OutputPath` to override the auto-generated filename:
+
+```powershell
+.\EnrolWatch.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\mfa-report.html"
+```
 
 ---
 
@@ -114,27 +108,35 @@ Then open `http://localhost:8080/mfa-dashboard.html` in your browser.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Sign-in popup blocked | Browser blocking popups | Allow popups for the file/localhost URL |
-| `AADSTS50011` redirect URI error | Redirect URI mismatch | Add the exact URL you're using to the app registration |
-| `Insufficient privileges` error | Permissions not granted | Re-check admin consent was granted in Step 2 |
-| Users show as not started incorrectly | API permissions issue | Ensure `UserAuthenticationMethod.Read.All` has admin consent |
-| Group shows 0 members | Wrong group ID | Double check the Object ID in Entra ID |
+| `Could not retrieve group members` | Wrong Group ID or insufficient permissions | Double-check the Object ID in Entra; confirm your account has Authentication Administrator or Global Reader |
+| `No users found in this group` | Group contains only nested groups or devices, not direct user members | Confirm the group has direct user members in Entra |
+| `WARNING: Could not get methods for [user]` | Transient API error for one user | Usually safe to ignore — the user will show as Not Started |
+| Sign-in window doesn't appear | PowerShell execution policy blocking the script | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` then try again |
+| `The term 'Get-MgUser' is not recognized` | Microsoft.Graph.Users module not installed | Run `Install-Module Microsoft.Graph.Users -Scope CurrentUser` |
+| `The term 'Get-MgGroupMember' is not recognized` | Microsoft.Graph.Groups module not installed | Run `Install-Module Microsoft.Graph.Groups -Scope CurrentUser` |
+| Fonts not loading in the HTML file | No internet connection when opening the file | The report uses Google Fonts — it still works but falls back to system fonts offline |
+| Tenant name not showing in report | `Microsoft.Graph.Identity.DirectoryManagement` not installed | This module is not required — the script uses `Invoke-MgGraphRequest` directly. If the name is still blank, check `Organization.Read.All` was consented |
 
 ---
 
-## Notes on what counts as registered
+## Execution policy
 
-| Method | Detected as |
-|---|---|
-| Microsoft Authenticator app | Authenticator App ✓ |
-| Windows Hello for Business | Windows Hello ✓ |
-| FIDO2 security key | Windows Hello ✓ (shown under WHfB column as it serves the same purpose) |
-| SMS / Phone / TOTP only | Neither column — user will show as **Not started** |
+If you see an error about the script not being allowed to run, set the execution policy for your user:
 
-A user is marked **Fully Enrolled** only when both Authenticator App and Windows Hello (or FIDO2) are registered.
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Then re-run the script.
 
 ---
 
-## Refresh interval
+## Running on macOS or Linux
 
-The default is 60 seconds. To change it, edit the `refreshInterval` value in the config block at the top of the file. Minimum recommended is 30 seconds to avoid throttling the Graph API.
+EnrolWatch works on PowerShell 7+ on macOS and Linux with no changes. Install PowerShell 7 via Homebrew on macOS:
+
+```bash
+brew install --cask powershell
+```
+
+Then launch it with `pwsh` and follow the same steps.
