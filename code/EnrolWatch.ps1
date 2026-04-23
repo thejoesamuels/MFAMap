@@ -8,10 +8,10 @@
 #   .\EnrolWatch.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\report.html"
 #
 # Requirements:
-#   Install-Module Microsoft.Graph.Authentication -Scope CurrentUser
-#   Install-Module Microsoft.Graph.Groups -Scope CurrentUser
-#   Install-Module Microsoft.Graph.Users -Scope CurrentUser
-#   Install-Module Microsoft.Graph.Identity.SignIns -Scope CurrentUser
+#   Install-Module Microsoft.Graph -Scope CurrentUser
+#
+# Only Microsoft.Graph.Authentication and Microsoft.Graph.Groups are loaded
+# at runtime. All other Graph calls use Invoke-MgGraphRequest directly.
 # ============================================================================
 
 param(
