@@ -38,15 +38,19 @@ Write-Host ""
 
 Write-Host "  Connecting to Microsoft Graph..." -ForegroundColor DarkGray
 
-try {
-    Connect-MgGraph -Scopes "GroupMember.Read.All", "UserAuthenticationMethod.Read.All", "User.Read.All", "Group.Read.All", "Organization.Read.All" -NoWelcome -ErrorAction Stop
-} catch {
-    Write-Host "  ERROR: Failed to connect to Microsoft Graph." -ForegroundColor Red
-    Write-Host "  $_" -ForegroundColor Red
-    exit 1
+$existingContext = Get-MgContext
+if ($existingContext) {
+    Write-Host "  Already connected as $($existingContext.Account)" -ForegroundColor Green
+} else {
+    try {
+        Connect-MgGraph -Scopes "GroupMember.Read.All", "UserAuthenticationMethod.Read.All", "User.Read.All", "Group.Read.All", "Organization.Read.All" -NoWelcome -ErrorAction Stop
+        Write-Host "  Connected." -ForegroundColor Green
+    } catch {
+        Write-Host "  ERROR: Failed to connect to Microsoft Graph." -ForegroundColor Red
+        Write-Host "  $_" -ForegroundColor Red
+        exit 1
+    }
 }
-
-Write-Host "  Connected." -ForegroundColor Green
 Write-Host ""
 
 # ── Get tenant name ───────────────────────────────────────────────────────────
@@ -586,6 +590,5 @@ try {
 Write-Host "  Report saved to: $OutputPath" -ForegroundColor Cyan
 Write-Host ""
 
-Disconnect-MgGraph | Out-Null
 Write-Host "  Done." -ForegroundColor Green
 Write-Host ""
