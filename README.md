@@ -1,10 +1,15 @@
 # ⚡ EnrolWatch
 
-**MFA enrolment tracker for Microsoft Entra ID drop-in sessions**
+**MFA enrolment tracker for Microsoft Entra ID**
 
-EnrolWatch generates a self-contained HTML dashboard showing MFA enrolment progress across a target Entra group. Run the script, get a file. Open it in any browser, share it with anyone, no server required.
+EnrolWatch generates a self-contained HTML dashboard showing MFA enrolment progress across a target Entra group. Run the script, get a file. Open it in any browser, share it with anyone — no server, no login, no dependencies.
 
-Sign in once with your Microsoft admin credentials, point it at a group, and within seconds you have a clear view of who has enrolled, who is partially through, and — most importantly — who still needs catching.
+Two scripts are included:
+
+| Script | Tracks |
+|---|---|
+| `EnrolWatch.ps1` | Microsoft Authenticator **and** Windows Hello for Business |
+| `EnrolWatch-Authenticator.ps1` | Microsoft Authenticator only |
 
 ---
 
@@ -12,11 +17,11 @@ Sign in once with your Microsoft admin credentials, point it at a group, and wit
 
 - 🗂️ **Single output file** — generates one self-contained HTML file with no dependencies
 - 🔑 **Uses your existing credentials** — authenticates via `Connect-MgGraph` with your own admin account; no app registration required
+- 🏢 **Tenant and group name in the report** — header shows exactly which tenant and group you ran against
+- 📁 **Auto-named output** — HTML file is named with the group name and timestamp automatically
 - 🎯 **Group-scoped** — targets a specific Entra group, not your entire tenant
-- 📛 **Group name in the report** — the output file header and browser tab show the name of the group, not just an ID
-- 📁 **Auto-named output** — the HTML file is named with the group name and timestamp automatically
 - 🚨 **"Still to catch" first** — users with nothing registered are surfaced at the top
-- 🟡 **Partial enrolment detection** — users with only one method registered are called out separately
+- 🟡 **Partial enrolment detection** — users with only one method registered are called out separately (full version)
 - ✅ **Completed section collapsed** — fully enrolled users are tucked away so they don't distract
 - 📊 **Progress bar** — visual breakdown of complete, partial, and not-started at a glance
 - 📤 **Fully portable** — the output HTML file can be opened, shared, or emailed with no auth required
@@ -31,10 +36,11 @@ Sign in once with your Microsoft admin credentials, point it at a group, and wit
         ↓
 Connect-MgGraph  (sign in with your admin account)
         ↓
-Microsoft Graph API
-/organization                                           (tenant display name)
-/groups/{id}                                            (group name)
-/groups/{id}/members                                    (group membership)
+Invoke-MgGraphRequest — direct Graph API calls
+/organization                                             (tenant display name)
+/groups/{id}                                              (group display name)
+/groups/{id}/members                                      (group membership)
+/users/{id}                                               (user display name + UPN)
 /users/{id}/authentication/microsoftAuthenticatorMethods  (Authenticator registration)
 /users/{id}/authentication/windowsHelloForBusinessMethods (WHfB registration)
         ↓
@@ -50,14 +56,14 @@ Open in any browser — no auth, no server, no dependencies
 
 EnrolWatch uses `Connect-MgGraph` with delegated permissions — it authenticates as you, using your existing admin account. No app registration is required.
 
-The script requests four Graph scopes at runtime:
+The script requests five Graph scopes at sign-in:
 
 | Scope | Why it's needed |
 |---|---|
-| `Group.Read.All` | Read the group name and details |
+| `Organization.Read.All` | Read the tenant display name |
+| `Group.Read.All` | Read the group display name |
 | `GroupMember.Read.All` | Read the membership of the target group |
-| `User.Read.All` | Resolve group member IDs to user display names and UPNs |
-| `Organization.Read.All` | Read the tenant display name (via direct Graph API call — no extra module required) |
+| `User.Read.All` | Resolve member IDs to display names and UPNs |
 | `UserAuthenticationMethod.Read.All` | Read MFA registration details for each user |
 
 All are read-only. The script cannot make any changes to users, groups, or authentication methods.
@@ -66,24 +72,19 @@ All are read-only. The script cannot make any changes to users, groups, or authe
 
 ## 📋 Requirements
 
-- **PowerShell 5.1+** or **PowerShell 7+**
-- **Microsoft.Graph PowerShell modules** — see Quick Start below
+- **PowerShell 7+** (recommended) or Windows PowerShell 5.1
+- **Microsoft.Graph** PowerShell module — see Quick Start below
 - An account with at least **Authentication Administrator** or **Global Reader** role in the target tenant
 
 ---
 
 ## 🚀 Quick start
 
-**1. Install the required modules** (one-time, run as yourself)
+**1. Install the Microsoft Graph module** (one-time)
 
 ```powershell
-Install-Module Microsoft.Graph.Authentication -Scope CurrentUser
-Install-Module Microsoft.Graph.Groups -Scope CurrentUser
-Install-Module Microsoft.Graph.Users -Scope CurrentUser
-Install-Module Microsoft.Graph.Identity.SignIns -Scope CurrentUser
+Install-Module Microsoft.Graph -Scope CurrentUser -Force
 ```
-
-If prompted to trust the PSGallery repository, type `Y` and press Enter.
 
 **2. Get your group's Object ID**
 
@@ -95,17 +96,17 @@ In [entra.microsoft.com](https://entra.microsoft.com) → **Groups** → find yo
 .\EnrolWatch.ps1 -GroupId "your-group-object-id"
 ```
 
-This will prompt you to sign in with your Microsoft admin account, then generate a timestamped HTML report in the current directory.
+Sign in with your Microsoft admin account when prompted. The script generates a timestamped HTML report in the current directory.
 
 **4. Open the report**
 
-The script prints the exact filename on completion. Open it with:
+The script prints the exact filename on completion:
 
-```powershell
-Start-Process ".\enrolwatch_GroupName_2025-01-01_0900.html"
+```
+  Report saved to: .\enrolwatch_Staff_2025-06-01_0930.html
 ```
 
-Or just double-click the file.
+Double-click the file or open it in any browser.
 
 ---
 
@@ -122,6 +123,9 @@ Or just double-click the file.
 # Basic — output file named automatically from group name and timestamp
 .\EnrolWatch.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00"
 
+# Authenticator only
+.\EnrolWatch-Authenticator.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00"
+
 # Custom output path
 .\EnrolWatch.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -OutputPath "C:\Reports\mfa-report.html"
 ```
@@ -130,48 +134,53 @@ Or just double-click the file.
 
 ## 📝 What counts as enrolled
 
+### EnrolWatch.ps1 (full version)
+
 | Method registered | Counted as |
 |---|---|
 | Microsoft Authenticator app | ✅ Authenticator App |
 | Windows Hello for Business | ✅ Windows Hello |
-| SMS / Voice Call / FIDO2 / TOTP only | ❌ Neither — user shown as **Not started** |
+| SMS / Voice Call / FIDO2 / TOTP only | ❌ Neither — shown as **Not started** |
 
-A user is marked **Fully Enrolled** only when both Authenticator App and Windows Hello for Business are registered. Users with only one method appear in the **Partially Enrolled** section.
+A user is **Fully Enrolled** only when both Authenticator and WHfB are registered. One method only = **Partially Enrolled**.
+
+### EnrolWatch-Authenticator.ps1
+
+| Method registered | Counted as |
+|---|---|
+| Microsoft Authenticator app | ✅ Registered |
+| Anything else only | ❌ Not registered |
 
 ---
 
 ## 🔒 Security
 
-**No data leaves your machine.** The script queries Microsoft Graph directly from your PowerShell session and writes the output to a local HTML file. No third-party services, no telemetry, no logging endpoints.
+**No data leaves your machine.** The script queries Microsoft Graph directly from your PowerShell session and writes output to a local HTML file. No third-party services, no telemetry, no logging endpoints.
 
-**Delegated permissions only.** The script authenticates as you — if your account can only see certain users, so can the script. There are no application permissions or background processes.
+**Delegated permissions only.** The script authenticates as you — it can only see what your account can see. No application permissions, no background processes, no scheduled jobs.
 
-**The output file contains no credentials.** The generated HTML is static — it contains only the data retrieved at generation time, with no tokens, secrets, or connection strings embedded.
+**The output file contains no credentials.** The generated HTML is static — it contains only the data retrieved at generation time. No tokens, secrets, or connection strings.
 
 **Treat the output file as internal data.** It contains names, email addresses, and MFA status of your users. Share it only with people who should have that information.
+
+**Note on the consent prompt.** EnrolWatch uses `Connect-MgGraph` which routes through the shared Microsoft Graph Command Line Tools app registration. The consent screen may show a large list of permissions — these reflect the full history of that shared app in your tenant, not what EnrolWatch specifically requests. Only the five scopes listed above are requested at runtime.
 
 ---
 
 ## 🔄 Refreshing during a session
 
-Re-run the script at any point to generate a fresh report:
-
-```powershell
-.\EnrolWatch.ps1 -GroupId "your-group-id"
-```
-
-Each run produces a new timestamped file so previous snapshots are preserved. The script stays signed in for the duration of your PowerShell session — you won't be prompted to sign in again unless the token has expired.
+Re-run the script to generate a fresh report. Each run produces a new timestamped file so previous snapshots are preserved. The script stays signed in for the duration of your PowerShell session — you won't be prompted to sign in again unless the token has expired.
 
 ---
 
 ## 📦 Dependencies
 
-| Module | Notes |
+| Module | Used for |
 |---|---|
-| [Microsoft.Graph.Authentication](https://www.powershellgallery.com/packages/Microsoft.Graph.Authentication) | `Connect-MgGraph` |
+| [Microsoft.Graph.Authentication](https://www.powershellgallery.com/packages/Microsoft.Graph.Authentication) | `Connect-MgGraph`, `Invoke-MgGraphRequest` |
 | [Microsoft.Graph.Groups](https://www.powershellgallery.com/packages/Microsoft.Graph.Groups) | `Get-MgGroup`, `Get-MgGroupMember` |
-| [Microsoft.Graph.Users](https://www.powershellgallery.com/packages/Microsoft.Graph.Users) | `Get-MgUser` |
-| [Microsoft.Graph.Identity.SignIns](https://www.powershellgallery.com/packages/Microsoft.Graph.Identity.SignIns) | `Get-MgUserAuthenticationMicrosoftAuthenticatorMethod`, `Get-MgUserAuthenticationWindowsHelloForBusinessMethod` |
+
+All other Graph calls use `Invoke-MgGraphRequest` directly to avoid module version conflicts.
 
 ---
 
