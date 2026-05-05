@@ -526,3 +526,5 @@ Write-Host "  Report saved to: $OutputPath" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Done." -ForegroundColor Green
 Write-Host ""
+Write-Host "  Don't forget: Disconnect-MgGraph when finished." -ForegroundColor DarkGray
+Write-Host ""

@@ -195,6 +195,14 @@ A user is **Fully Enrolled** only when both are registered.
 
 **Note on the consent prompt.** EnrolWatch uses `Connect-MgGraph` which routes through the shared Microsoft Graph Command Line Tools app registration. The consent screen may show a large list of permissions — these reflect the full history of that shared app in your tenant, not what EnrolWatch specifically requests. Only the five scopes listed above are requested at runtime.
 
+**Disconnect when you're done.** EnrolWatch deliberately keeps the Graph session alive between runs so you don't have to sign in repeatedly during a drop-in session. When you're finished, disconnect explicitly to invalidate the token:
+
+```powershell
+Disconnect-MgGraph
+```
+
+Closing the PowerShell window has the same effect since the token is session-scoped, but explicitly disconnecting is good hygiene — particularly when running against client tenants.
+
 ---
 
 ## 🔄 Refreshing during a session
