@@ -111,6 +111,7 @@ Write-Host ""
 
 # ── Group members ─────────────────────────────────────────────────────────────
 Write-Host "  Fetching group members..." -ForegroundColor DarkGray
+$skippedMembers = @()
 try {
     $memberObjects = @(Get-MgGroupMember -GroupId $GroupId -All -ErrorAction Stop)
 
@@ -122,13 +123,21 @@ try {
                 DisplayName       = $response.displayName
                 UserPrincipalName = $response.userPrincipalName
             }
-        } catch {}
+        } catch {
+            $skippedMembers += $m.Id
+        }
     }
     $members = @($members | Where-Object { $_ -ne $null })
 } catch {
     Write-Host "  ERROR: Could not retrieve group members. Check the Group ID is correct." -ForegroundColor Red
     Write-Host "  $_" -ForegroundColor Red
     exit 1
+}
+
+if ($skippedMembers.Count -gt 0) {
+    Write-Host "  WARNING: $($skippedMembers.Count) group member(s) could not be resolved and will be excluded from the report:" -ForegroundColor Yellow
+    $skippedMembers | ForEach-Object { Write-Host "    - $_" -ForegroundColor Yellow }
+    Write-Host ""
 }
 
 $totalCount = $members.Count
@@ -143,6 +152,7 @@ Write-Host ""
 Write-Host "  Checking authentication methods..." -ForegroundColor DarkGray
 
 $users = @()
+$errorUsers = @()
 $i = 0
 
 foreach ($member in $members) {
@@ -152,6 +162,7 @@ foreach ($member in $members) {
     $hasAuthenticator = $false
     $hasWHfB          = $false
     $hasPasskey       = $false
+    $fetchError       = $false
 
     # Only fetch what we need based on mode
     if ($mode -in @(1,3,4)) {
@@ -160,33 +171,52 @@ foreach ($member in $members) {
             $authMethods = @($authResp.value)
             $hasAuthenticator = $authMethods.Count -gt 0
             $hasPasskey = ($authMethods | Where-Object { $_.deviceTag -eq 'SoftwareTokenPasskey' -or $_.authenticationMode -eq 'deviceBoundPushNotification' }).Count -gt 0
-        } catch {}
+        } catch {
+            $fetchError = $true
+        }
     }
 
     if ($mode -in @(1,2)) {
         try {
             $whfbResp = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/windowsHelloForBusinessMethods" -ErrorAction Stop
             $hasWHfB = @($whfbResp.value).Count -gt 0
-        } catch {}
+        } catch {
+            $fetchError = $true
+        }
     }
 
     if ($mode -eq 4) {
         try {
             $fido2Resp = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/fido2Methods" -ErrorAction Stop
             if (@($fido2Resp.value).Count -gt 0) { $hasPasskey = $true }
-        } catch {}
+        } catch {
+            $fetchError = $true
+        }
     }
 
-    $users += [PSCustomObject]@{
-        Name             = $member.DisplayName
-        Email            = $member.UserPrincipalName
-        HasAuthenticator = $hasAuthenticator
-        HasWHfB          = $hasWHfB
-        HasPasskey       = $hasPasskey
+    if ($fetchError) {
+        $errorUsers += [PSCustomObject]@{
+            Name  = $member.DisplayName
+            Email = $member.UserPrincipalName
+        }
+    } else {
+        $users += [PSCustomObject]@{
+            Name             = $member.DisplayName
+            Email            = $member.UserPrincipalName
+            HasAuthenticator = $hasAuthenticator
+            HasWHfB          = $hasWHfB
+            HasPasskey       = $hasPasskey
+        }
     }
 }
 
 Write-Progress -Activity "EnrolWatch" -Completed
+
+if ($errorUsers.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  WARNING: Could not retrieve auth methods for $($errorUsers.Count) user(s) — excluded from report:" -ForegroundColor Yellow
+    $errorUsers | ForEach-Object { Write-Host "    - $($_.Name) ($($_.Email))" -ForegroundColor Yellow }
+}
 
 # ── Categorise ────────────────────────────────────────────────────────────────
 switch ($mode) {
@@ -349,6 +379,29 @@ $progressPartialDiv = if ($mode -eq 1) { '<div class="progress-partial"></div>' 
 $progressPartialLabel = if ($mode -eq 1) { " &middot; <span style=`"color:var(--amber)`">$partialCount partial</span>" } else { "" }
 $completedLabel = if ($mode -eq 1) { "Fully Enrolled" } else { "Registered" }
 
+# ── Error users section (shown only if fetch errors occurred) ─────────────────
+$errorSection = ""
+if ($errorUsers.Count -gt 0) {
+    $errorRows = ($errorUsers | ForEach-Object {
+        $safeName  = [System.Web.HttpUtility]::HtmlEncode($_.Name)
+        $safeEmail = [System.Web.HttpUtility]::HtmlEncode($_.Email)
+        "<div class=`"row`"><div class=`"cell`"><span class=`"name`">$safeName</span><span class=`"email`">$safeEmail</span></div><div colspan=`"3`" style=`"color:var(--muted);font-size:0.8rem`">Auth method check failed &mdash; excluded from results</div></div>"
+    }) -join "`n"
+    $errorCount = $errorUsers.Count
+    $errorSection = @"
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title" style="color:var(--amber)">Could Not Check</span>
+      <span class="section-count" style="background:var(--amber-dim);color:var(--amber)">$errorCount</span>
+    </div>
+    <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.75rem">Auth method queries failed for these users. They are excluded from all counts. Re-run the script to retry.</p>
+    <div class="table">
+      $errorRows
+    </div>
+  </div>
+"@
+}
+
 # ── Build HTML ────────────────────────────────────────────────────────────────
 $html = @"
 <!DOCTYPE html>
@@ -480,6 +533,8 @@ $html = @"
   </div>
 
   $partialSection
+
+  $errorSection
 
   <div class="section">
     <div class="section-header">
