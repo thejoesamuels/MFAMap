@@ -1,17 +1,19 @@
 # ============================================================================
 # EnrolWatch.ps1
 # MFA enrolment tracker for Microsoft Entra ID
-# Generates a self-contained HTML dashboard from a target Entra group
+#
+# Modes:
+#   1 — Microsoft Authenticator + Windows Hello for Business
+#   2 — Windows Hello for Business only
+#   3 — Microsoft Authenticator only
+#   4 — Passkey (FIDO2 or Authenticator device-bound passkey)
 #
 # Usage:
 #   .\EnrolWatch.ps1 -GroupId "your-group-object-id"
 #   .\EnrolWatch.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\report.html"
 #
 # Requirements:
-#   Install-Module Microsoft.Graph -Scope CurrentUser
-#
-# Only Microsoft.Graph.Authentication and Microsoft.Graph.Groups are loaded
-# at runtime. All other Graph calls use Invoke-MgGraphRequest directly.
+#   Install-Module Microsoft.Graph -Scope CurrentUser -Force
 # ============================================================================
 
 param(
@@ -22,20 +24,44 @@ param(
     [string]$OutputPath = ""
 )
 
-# ── Load System.Web for HtmlEncode (must be before any function calls) ────────
 Add-Type -AssemblyName System.Web
 
-# ── Explicitly import required modules ───────────────────────────────────────
-# Only Authentication and Groups needed — all other calls use Invoke-MgGraphRequest directly
 Get-Module Microsoft.Graph.Authentication -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1 | Import-Module -Force
-Get-Module Microsoft.Graph.Groups -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1 | Import-Module -Force
+Get-Module Microsoft.Graph.Groups         -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1 | Import-Module -Force
 
-# ── Connect to Graph ──────────────────────────────────────────────────────────
+# ── Mode selection ────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  EnrolWatch" -ForegroundColor Cyan
 Write-Host "  MFA Enrolment Tracker" -ForegroundColor DarkGray
 Write-Host ""
+Write-Host "  Select tracking mode:" -ForegroundColor White
+Write-Host "  [1]  Authenticator App + Windows Hello for Business" -ForegroundColor Gray
+Write-Host "  [2]  Windows Hello for Business only" -ForegroundColor Gray
+Write-Host "  [3]  Authenticator App only" -ForegroundColor Gray
+Write-Host "  [4]  Passkey (FIDO2 or Authenticator device-bound passkey)" -ForegroundColor Gray
+Write-Host ""
 
+do { $modeInput = Read-Host "  Enter choice (1-4)" } while ($modeInput -notin @('1','2','3','4'))
+$mode = [int]$modeInput
+
+$modeLabel = switch ($mode) {
+    1 { "Authenticator + WHfB" }
+    2 { "Windows Hello for Business" }
+    3 { "Microsoft Authenticator" }
+    4 { "Passkey" }
+}
+$modeShort = switch ($mode) {
+    1 { "Mode1-Auth-WHfB" }
+    2 { "Mode2-WHfB" }
+    3 { "Mode3-Auth" }
+    4 { "Mode4-Passkey" }
+}
+
+Write-Host ""
+Write-Host "  Mode: $modeLabel" -ForegroundColor Cyan
+Write-Host ""
+
+# ── Connect ───────────────────────────────────────────────────────────────────
 Write-Host "  Connecting to Microsoft Graph..." -ForegroundColor DarkGray
 
 $existingContext = Get-MgContext
@@ -53,48 +79,38 @@ if ($existingContext) {
 }
 Write-Host ""
 
-# ── Get tenant name ───────────────────────────────────────────────────────────
+# ── Tenant name ───────────────────────────────────────────────────────────────
 Write-Host "  Fetching tenant details..." -ForegroundColor DarkGray
-
 try {
-    # Use Invoke-MgGraphRequest to avoid needing the DirectoryManagement module
     $orgResponse = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/organization?`$select=displayName" -ErrorAction Stop
     $tenantName = $orgResponse.value[0].displayName
-    if ([string]::IsNullOrEmpty($tenantName)) {
-        Write-Host "  WARNING: Tenant name was empty." -ForegroundColor Yellow
-        $tenantName = ""
-    } else {
-        Write-Host "  Tenant: $tenantName" -ForegroundColor Green
-    }
+    if ([string]::IsNullOrEmpty($tenantName)) { $tenantName = "" } else { Write-Host "  Tenant: $tenantName" -ForegroundColor Green }
 } catch {
-    Write-Host "  WARNING: Could not retrieve tenant name: $_" -ForegroundColor Yellow
+    Write-Host "  WARNING: Could not retrieve tenant name." -ForegroundColor Yellow
     $tenantName = ""
 }
 
-# ── Get group name ────────────────────────────────────────────────────────────
+# ── Group name ────────────────────────────────────────────────────────────────
 Write-Host "  Fetching group details..." -ForegroundColor DarkGray
-
 try {
-    $group = Get-MgGroup -GroupId $GroupId -Property DisplayName -ErrorAction Stop
-    $groupName = $group.DisplayName
+    $groupResponse = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/groups/$GroupId`?`$select=displayName" -ErrorAction Stop
+    $groupName = $groupResponse.displayName
     Write-Host "  Group: $groupName" -ForegroundColor Green
 } catch {
     Write-Host "  WARNING: Could not retrieve group name." -ForegroundColor Yellow
     $groupName = $GroupId
 }
 
-# ── Build output path from group name + timestamp if not specified ────────────
+# ── Output filename ───────────────────────────────────────────────────────────
 if ($OutputPath -eq "") {
     $safeName  = $groupName -replace '[^\w\s-]', '' -replace '\s+', '-'
     $timestamp = Get-Date -Format "yyyy-MM-dd_HHmm"
-    $OutputPath = ".\enrolwatch_${safeName}_${timestamp}.html"
+    $OutputPath = ".\enrolwatch_${safeName}_${modeShort}_${timestamp}.html"
 }
-
 Write-Host ""
 
-# ── Get group members ─────────────────────────────────────────────────────────
+# ── Group members ─────────────────────────────────────────────────────────────
 Write-Host "  Fetching group members..." -ForegroundColor DarkGray
-
 try {
     $memberObjects = @(Get-MgGroupMember -GroupId $GroupId -All -ErrorAction Stop)
 
@@ -106,31 +122,24 @@ try {
                 DisplayName       = $response.displayName
                 UserPrincipalName = $response.userPrincipalName
             }
-        } catch {
-            # Not a user object (e.g. nested group or device) — skip silently
-        }
+        } catch {}
     }
-
     $members = @($members | Where-Object { $_ -ne $null })
 } catch {
     Write-Host "  ERROR: Could not retrieve group members. Check the Group ID is correct." -ForegroundColor Red
     Write-Host "  $_" -ForegroundColor Red
-    Disconnect-MgGraph | Out-Null
     exit 1
 }
 
-$totalCount = ($members | Measure-Object).Count
-
+$totalCount = $members.Count
 if ($totalCount -eq 0) {
     Write-Host "  ERROR: No users found in this group. Check the Group ID." -ForegroundColor Red
-    Disconnect-MgGraph | Out-Null
     exit 1
 }
-
 Write-Host "  Found $totalCount members." -ForegroundColor Green
 Write-Host ""
 
-# ── Get auth methods for each user ───────────────────────────────────────────
+# ── Auth methods ──────────────────────────────────────────────────────────────
 Write-Host "  Checking authentication methods..." -ForegroundColor DarkGray
 
 $users = @()
@@ -140,43 +149,68 @@ foreach ($member in $members) {
     $i++
     Write-Progress -Activity "EnrolWatch" -Status "Checking $($member.DisplayName) ($i of $totalCount)" -PercentComplete (($i / $totalCount) * 100)
 
-    try {
-        $hasAuthenticator = $false
-        $hasWHfB          = $false
+    $hasAuthenticator = $false
+    $hasWHfB          = $false
+    $hasPasskey       = $false
 
+    # Only fetch what we need based on mode
+    if ($mode -in @(1,3,4)) {
         try {
-            $authResponse = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/microsoftAuthenticatorMethods" -ErrorAction Stop
-            $hasAuthenticator = $authResponse.value.Count -gt 0
+            $authResp = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/microsoftAuthenticatorMethods" -ErrorAction Stop
+            $authMethods = @($authResp.value)
+            $hasAuthenticator = $authMethods.Count -gt 0
+            $hasPasskey = ($authMethods | Where-Object { $_.deviceTag -eq 'SoftwareTokenPasskey' -or $_.authenticationMode -eq 'deviceBoundPushNotification' }).Count -gt 0
         } catch {}
+    }
 
+    if ($mode -in @(1,2)) {
         try {
-            $whfbResponse = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/windowsHelloForBusinessMethods" -ErrorAction Stop
-            $hasWHfB = $whfbResponse.value.Count -gt 0
+            $whfbResp = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/windowsHelloForBusinessMethods" -ErrorAction Stop
+            $hasWHfB = @($whfbResp.value).Count -gt 0
         } catch {}
+    }
 
-        $users += [PSCustomObject]@{
-            Name             = $member.DisplayName
-            Email            = $member.UserPrincipalName
-            HasAuthenticator = $hasAuthenticator
-            HasWHfB          = $hasWHfB
-        }
-    } catch {
-        Write-Host "  WARNING: Could not get methods for $($member.DisplayName)" -ForegroundColor Yellow
-        $users += [PSCustomObject]@{
-            Name             = $member.DisplayName
-            Email            = $member.UserPrincipalName
-            HasAuthenticator = $false
-            HasWHfB          = $false
-        }
+    if ($mode -eq 4) {
+        try {
+            $fido2Resp = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/fido2Methods" -ErrorAction Stop
+            if (@($fido2Resp.value).Count -gt 0) { $hasPasskey = $true }
+        } catch {}
+    }
+
+    $users += [PSCustomObject]@{
+        Name             = $member.DisplayName
+        Email            = $member.UserPrincipalName
+        HasAuthenticator = $hasAuthenticator
+        HasWHfB          = $hasWHfB
+        HasPasskey       = $hasPasskey
     }
 }
 
 Write-Progress -Activity "EnrolWatch" -Completed
 
 # ── Categorise ────────────────────────────────────────────────────────────────
-$notStarted = @($users | Where-Object { -not $_.HasAuthenticator -and -not $_.HasWHfB })
-$partial    = @($users | Where-Object { ($_.HasAuthenticator -or $_.HasWHfB) -and -not ($_.HasAuthenticator -and $_.HasWHfB) })
-$complete   = @($users | Where-Object { $_.HasAuthenticator -and $_.HasWHfB })
+switch ($mode) {
+    1 {
+        $notStarted = @($users | Where-Object { -not $_.HasAuthenticator -and -not $_.HasWHfB })
+        $partial    = @($users | Where-Object { ($_.HasAuthenticator -or $_.HasWHfB) -and -not ($_.HasAuthenticator -and $_.HasWHfB) })
+        $complete   = @($users | Where-Object { $_.HasAuthenticator -and $_.HasWHfB })
+    }
+    2 {
+        $notStarted = @($users | Where-Object { -not $_.HasWHfB })
+        $partial    = @()
+        $complete   = @($users | Where-Object { $_.HasWHfB })
+    }
+    3 {
+        $notStarted = @($users | Where-Object { -not $_.HasAuthenticator })
+        $partial    = @()
+        $complete   = @($users | Where-Object { $_.HasAuthenticator })
+    }
+    4 {
+        $notStarted = @($users | Where-Object { -not $_.HasPasskey })
+        $partial    = @()
+        $complete   = @($users | Where-Object { $_.HasPasskey })
+    }
+}
 
 $totalUsers      = $users.Count
 $notStartedCount = $notStarted.Count
@@ -190,20 +224,54 @@ Write-Host ""
 Write-Host "  Results:" -ForegroundColor Cyan
 Write-Host "    Total:        $totalUsers"      -ForegroundColor White
 Write-Host "    Not started:  $notStartedCount" -ForegroundColor Red
-Write-Host "    Partial:      $partialCount"    -ForegroundColor Yellow
+if ($partialCount -gt 0) { Write-Host "    Partial:      $partialCount" -ForegroundColor Yellow }
 Write-Host "    Complete:     $completeCount"   -ForegroundColor Green
 Write-Host ""
 
+# ── Mode-specific accent colour ───────────────────────────────────────────────
+$accentColor = switch ($mode) {
+    1 { "#43C0B9" }  # teal
+    2 { "#7b6ff0" }  # purple
+    3 { "#43C0B9" }  # teal
+    4 { "#f0a843" }  # amber
+}
+$accentDim = switch ($mode) {
+    1 { "rgba(67,192,185,0.15)" }
+    2 { "rgba(123,111,240,0.15)" }
+    3 { "rgba(67,192,185,0.15)" }
+    4 { "rgba(240,168,67,0.15)" }
+}
+
 # ── HTML helpers ──────────────────────────────────────────────────────────────
 function Get-Badge([bool]$registered) {
-    if ($registered) {
-        return '<span class="badge yes">&#10003; Registered</span>'
-    } else {
-        return '<span class="badge no">&#10005; Not registered</span>'
+    if ($registered) { return '<span class="badge yes">&#10003; Registered</span>' }
+    else             { return '<span class="badge no">&#10005; Not registered</span>' }
+}
+
+function Get-MethodCells($u, [int]$m) {
+    switch ($m) {
+        1 { return "<div>$(Get-Badge $u.HasAuthenticator)</div><div>$(Get-Badge $u.HasWHfB)</div>" }
+        2 { return "<div>$(Get-Badge $u.HasWHfB)</div>" }
+        3 { return "<div>$(Get-Badge $u.HasAuthenticator)</div>" }
+        4 { return "<div>$(Get-Badge $u.HasPasskey)</div>" }
     }
 }
 
-function Get-Rows($userList, [string]$statusType) {
+function Get-TableHeader([int]$m) {
+    switch ($m) {
+        1 { return "<div>User</div><div>Authenticator App</div><div>Windows Hello</div><div>Status</div>" }
+        2 { return "<div>User</div><div>Windows Hello</div><div>Status</div>" }
+        3 { return "<div>User</div><div>Authenticator App</div><div>Status</div>" }
+        4 { return "<div>User</div><div>Passkey</div><div>Status</div>" }
+    }
+}
+
+function Get-GridCols([int]$m) {
+    if ($m -eq 1) { return "1fr 170px 170px 110px" }
+    else          { return "1fr 200px 110px" }
+}
+
+function Get-Rows($userList, [string]$statusType, [int]$m) {
     if ($userList.Count -eq 0) {
         $msg = switch ($statusType) {
             "none"    { "Everyone has started enrolment &#127881;" }
@@ -212,37 +280,74 @@ function Get-Rows($userList, [string]$statusType) {
         }
         return "<div class=`"empty`">$msg</div>"
     }
-
     $rows = ""
     foreach ($u in $userList) {
-        $authBadge = Get-Badge $u.HasAuthenticator
-        $whfbBadge = Get-Badge $u.HasWHfB
+        $methodCells = Get-MethodCells $u $m
         $pill = switch ($statusType) {
-            "done"    { '<span class="pill done">Complete</span>' }
+            "done"    { if ($m -eq 1) { '<span class="pill done">Complete</span>' } else { '<span class="pill done">Registered</span>' } }
             "partial" { '<span class="pill partial">Partial</span>' }
-            "none"    { '<span class="pill none">Not started</span>' }
+            "none"    { if ($m -eq 1) { '<span class="pill none">Not started</span>' } else { '<span class="pill none">Not registered</span>' } }
         }
         $safeName  = [System.Web.HttpUtility]::HtmlEncode($u.Name)
         $safeEmail = [System.Web.HttpUtility]::HtmlEncode($u.Email)
         $rows += @"
         <div class="row">
           <div class="cell"><span class="name">$safeName</span><span class="email">$safeEmail</span></div>
-          <div class="cell">$authBadge</div>
-          <div class="cell">$whfbBadge</div>
-          <div class="cell">$pill</div>
+          $methodCells
+          <div>$pill</div>
         </div>
 "@
     }
     return $rows
 }
 
-$rowsNotStarted = Get-Rows $notStarted "none"
-$rowsPartial    = Get-Rows $partial    "partial"
-$rowsComplete   = Get-Rows $complete   "done"
+$gridCols       = Get-GridCols $mode
+$tableHeaderHtml = Get-TableHeader $mode
+$rowsNotStarted  = Get-Rows $notStarted "none"    $mode
+$rowsPartial     = Get-Rows $partial    "partial" $mode
+$rowsComplete    = Get-Rows $complete   "done"    $mode
 
 $safeGroupName  = [System.Web.HttpUtility]::HtmlEncode($groupName)
 $safeTenantName = [System.Web.HttpUtility]::HtmlEncode($tenantName)
-$generatedAt   = Get-Date -Format "dd MMM yyyy 'at' HH:mm"
+$safeModeLabel  = [System.Web.HttpUtility]::HtmlEncode($modeLabel)
+$generatedAt    = Get-Date -Format "dd MMM yyyy 'at' HH:mm"
+
+$headerSubtitle = if ($tenantName) { "$safeTenantName &middot; $safeGroupName" } else { $safeGroupName }
+
+# ── Stat cards ────────────────────────────────────────────────────────────────
+if ($mode -eq 1) {
+    $statCards = @"
+    <div class="stat total"><div class="stat-label">Total Users</div><div class="stat-number">$totalUsers</div><div class="stat-sub">in target group</div></div>
+    <div class="stat remaining"><div class="stat-label">Not Started</div><div class="stat-number">$notStartedCount</div><div class="stat-sub">still to catch</div></div>
+    <div class="stat partial"><div class="stat-label">Partial</div><div class="stat-number">$partialCount</div><div class="stat-sub">one method only</div></div>
+    <div class="stat complete"><div class="stat-label">Fully Enrolled</div><div class="stat-number">$completeCount</div><div class="stat-sub">authenticator + WHfB</div></div>
+"@
+} else {
+    $statCards = @"
+    <div class="stat total"><div class="stat-label">Total Users</div><div class="stat-number">$totalUsers</div><div class="stat-sub">in target group</div></div>
+    <div class="stat remaining"><div class="stat-label">Not Registered</div><div class="stat-number">$notStartedCount</div><div class="stat-sub">still to catch</div></div>
+    <div class="stat complete"><div class="stat-label">Registered</div><div class="stat-number">$completeCount</div><div class="stat-sub">$safeModeLabel</div></div>
+    <div class="stat partial"><div class="stat-label">Coverage</div><div class="stat-number">$pctComplete%</div><div class="stat-sub">of group enrolled</div></div>
+"@
+}
+
+# ── Partial section (mode 1 only) ─────────────────────────────────────────────
+$partialSection = if ($mode -eq 1) { @"
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title partial">Partially Enrolled</span>
+      <span class="section-count partial">$partialCount</span>
+    </div>
+    <div class="table">
+      <div class="table-header" style="grid-template-columns: $gridCols">$tableHeaderHtml</div>
+      $rowsPartial
+    </div>
+  </div>
+"@ } else { "" }
+
+$progressPartialDiv = if ($mode -eq 1) { '<div class="progress-partial"></div>' } else { "" }
+$progressPartialLabel = if ($mode -eq 1) { " &middot; <span style=`"color:var(--amber)`">$partialCount partial</span>" } else { "" }
+$completedLabel = if ($mode -eq 1) { "Fully Enrolled" } else { "Registered" }
 
 # ── Build HTML ────────────────────────────────────────────────────────────────
 $html = @"
@@ -257,225 +362,77 @@ $html = @"
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --navy:         #252436;
-    --navy-light:   #2f2d47;
-    --navy-lighter: #3a3756;
-    --teal:         #43C0B9;
-    --teal-dim:     rgba(67,192,185,0.15);
-    --red:          #e05c6a;
-    --red-dim:      rgba(224,92,106,0.12);
-    --amber:        #f0a843;
-    --amber-dim:    rgba(240,168,67,0.12);
-    --text:         #e8e6f0;
-    --text-muted:   #8b89a0;
-    --text-dim:     #5a5870;
-    --border:       rgba(255,255,255,0.06);
+    --navy: #252436; --navy-light: #2f2d47; --navy-lighter: #3a3756;
+    --accent: $accentColor; --accent-dim: $accentDim;
+    --red: #e05c6a; --red-dim: rgba(224,92,106,0.12);
+    --amber: #f0a843; --amber-dim: rgba(240,168,67,0.12);
+    --text: #e8e6f0; --text-muted: #8b89a0; --text-dim: #5a5870;
+    --border: rgba(255,255,255,0.06);
   }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    background: var(--navy);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    min-height: 100vh;
-  }
-
-  .header {
-    background: var(--navy-light);
-    border-bottom: 1px solid var(--border);
-    padding: 14px 28px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
+  body { background: var(--navy); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+  .header { background: var(--navy-light); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
   .header-left { display: flex; align-items: center; gap: 14px; }
-
-  .logo {
-    width: 34px; height: 34px;
-    background: var(--teal);
-    border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px;
-    flex-shrink: 0;
-  }
-
+  .logo { width: 34px; height: 34px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
   .header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
   .header-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-
-  .generated {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .mode-badge { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 99px; background: var(--accent-dim); color: var(--accent); }
+  .generated { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
   .main { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
-
   .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 20px; }
-
-  .stat {
-    background: var(--navy-light);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 18px;
-    position: relative; overflow: hidden;
-  }
-
+  .stat { background: var(--navy-light); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; position: relative; overflow: hidden; }
   .stat::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
-  .stat.total::before     { background: var(--text-dim); }
+  .stat.total::before { background: var(--text-dim); }
   .stat.remaining::before { background: var(--red); }
-  .stat.partial::before   { background: var(--amber); }
-  .stat.complete::before  { background: var(--teal); }
-
-  .stat-label {
-    font-size: 10px; font-weight: 500;
-    color: var(--text-muted);
-    text-transform: uppercase; letter-spacing: 0.07em;
-    margin-bottom: 8px;
-  }
-
-  .stat-number {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 34px; font-weight: 700; line-height: 1; margin-bottom: 5px;
-  }
-
-  .stat.total     .stat-number { color: var(--text); }
+  .stat.partial::before { background: var(--amber); }
+  .stat.complete::before { background: var(--accent); }
+  .stat-label { font-size: 10px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+  .stat-number { font-family: 'JetBrains Mono', monospace; font-size: 34px; font-weight: 700; line-height: 1; margin-bottom: 5px; }
+  .stat.total .stat-number { color: var(--text); }
   .stat.remaining .stat-number { color: var(--red); }
-  .stat.partial   .stat-number { color: var(--amber); }
-  .stat.complete  .stat-number { color: var(--teal); }
+  .stat.partial .stat-number { color: var(--amber); }
+  .stat.complete .stat-number { color: var(--accent); }
   .stat-sub { font-size: 11px; color: var(--text-dim); }
-
-  .progress-wrap {
-    background: var(--navy-light);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px 18px; margin-bottom: 22px;
-  }
-
-  .progress-label {
-    display: flex; justify-content: space-between;
-    font-size: 12px; color: var(--text-muted); margin-bottom: 10px;
-  }
-
-  .progress-label span.c { color: var(--teal); }
-  .progress-label span.p { color: var(--amber); }
-  .progress-label span.r { color: var(--red); }
-
-  .progress-track {
-    height: 7px; background: var(--navy-lighter);
-    border-radius: 99px; overflow: hidden; display: flex;
-  }
-
-  .progress-complete {
-    height: 100%; background: var(--teal);
-    border-radius: 99px 0 0 99px;
-    width: $pctComplete%;
-  }
-
-  .progress-partial {
-    height: 100%; background: var(--amber);
-    width: $pctPartial%;
-  }
-
+  .progress-wrap { background: var(--navy-light); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; margin-bottom: 22px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+  .progress-track { height: 7px; background: var(--navy-lighter); border-radius: 99px; overflow: hidden; display: flex; }
+  .progress-complete { height: 100%; background: var(--accent); border-radius: 99px 0 0 99px; width: $pctComplete%; }
+  .progress-partial { height: 100%; background: var(--amber); width: $pctPartial%; }
   .section { margin-bottom: 20px; }
   .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-
-  .section-title {
-    font-size: 12px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.07em;
-  }
-
+  .section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
   .section-title.remaining { color: var(--red); }
-  .section-title.partial   { color: var(--amber); }
-  .section-title.complete  { color: var(--teal); }
-
-  .section-count {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; padding: 2px 8px;
-    border-radius: 99px; font-weight: 600;
-  }
-
-  .section-count.remaining { background: var(--red-dim);   color: var(--red); }
-  .section-count.partial   { background: var(--amber-dim); color: var(--amber); }
-  .section-count.complete  { background: var(--teal-dim);  color: var(--teal); }
-
-  .table {
-    background: var(--navy-light);
-    border: 1px solid var(--border);
-    border-radius: 10px; overflow: hidden;
-  }
-
-  .table-header {
-    display: grid;
-    grid-template-columns: 1fr 170px 170px 110px;
-    padding: 9px 18px;
-    border-bottom: 1px solid var(--border);
-    font-size: 10px; font-weight: 500;
-    color: var(--text-dim);
-    text-transform: uppercase; letter-spacing: 0.07em;
-  }
-
-  .row {
-    display: grid;
-    grid-template-columns: 1fr 170px 170px 110px;
-    padding: 12px 18px;
-    border-bottom: 1px solid var(--border);
-    align-items: center;
-  }
-
+  .section-title.partial { color: var(--amber); }
+  .section-title.complete { color: var(--accent); }
+  .section-count { font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 2px 8px; border-radius: 99px; font-weight: 600; }
+  .section-count.remaining { background: var(--red-dim); color: var(--red); }
+  .section-count.partial { background: var(--amber-dim); color: var(--amber); }
+  .section-count.complete { background: var(--accent-dim); color: var(--accent); }
+  .table { background: var(--navy-light); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .table-header { padding: 9px 18px; border-bottom: 1px solid var(--border); font-size: 10px; font-weight: 500; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.07em; display: grid; }
+  .row { display: grid; padding: 12px 18px; border-bottom: 1px solid var(--border); align-items: center; }
   .row:last-child { border-bottom: none; }
   .row:hover { background: rgba(255,255,255,0.02); }
-
   .cell { display: flex; flex-direction: column; justify-content: center; }
-
-  .name  { font-size: 14px; font-weight: 500; }
+  .name { font-size: 14px; font-weight: 500; }
   .email { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
-
-  .badge {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 12px; font-weight: 500;
-    padding: 3px 9px; border-radius: 6px;
-    width: fit-content;
-  }
-
-  .badge.yes { background: var(--teal-dim); color: var(--teal); }
-  .badge.no  { background: var(--red-dim);  color: var(--red); }
-
-  .pill {
-    font-size: 11px; font-weight: 600;
-    padding: 3px 10px; border-radius: 99px;
-    display: inline-block; width: fit-content;
-  }
-
-  .pill.done    { background: var(--teal-dim);  color: var(--teal); }
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 3px 9px; border-radius: 6px; width: fit-content; }
+  .badge.yes { background: var(--accent-dim); color: var(--accent); }
+  .badge.no { background: var(--red-dim); color: var(--red); }
+  .pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 99px; display: inline-block; width: fit-content; }
+  .pill.done { background: var(--accent-dim); color: var(--accent); }
   .pill.partial { background: var(--amber-dim); color: var(--amber); }
-  .pill.none    { background: var(--red-dim);   color: var(--red); }
-
-  .collapse-toggle {
-    display: flex; align-items: center; gap: 10px;
-    cursor: pointer; user-select: none;
-    background: none; border: none; color: inherit;
-    font-family: inherit; padding: 0;
-  }
-
+  .pill.none { background: var(--red-dim); color: var(--red); }
+  .collapse-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; background: none; border: none; color: inherit; font-family: inherit; padding: 0; }
   .chevron { font-size: 10px; color: var(--text-dim); transition: transform 0.2s; display: inline-block; }
   .chevron.open { transform: rotate(90deg); }
   .collapse-body { display: none; }
   .collapse-body.open { display: block; }
-
-  .empty {
-    padding: 22px; text-align: center;
-    font-size: 13px; color: var(--text-dim);
-  }
-
-  .footer {
-    text-align: center; padding: 18px;
-    font-size: 11px; color: var(--text-dim);
-    font-family: 'JetBrains Mono', monospace;
-  }
-
-  .footer span { color: var(--teal); }
+  .empty { padding: 22px; text-align: center; font-size: 13px; color: var(--text-dim); }
+  .footer { text-align: center; padding: 18px; font-size: 11px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
+  .footer span { color: var(--accent); }
+  .table-header, .row { grid-template-columns: $gridCols; }
 </style>
 </head>
 <body>
@@ -485,45 +442,29 @@ $html = @"
     <div class="logo">&#9889;</div>
     <div>
       <div class="header-title">MFA Enrolment Tracker</div>
-      <div class="header-subtitle">$(if ($tenantName) { "$safeTenantName &middot; " })$safeGroupName</div>
+      <div class="header-subtitle">$headerSubtitle</div>
     </div>
   </div>
-  <div class="generated">Generated $generatedAt</div>
+  <div class="header-right">
+    <span class="mode-badge">$safeModeLabel</span>
+    <div class="generated">Generated $generatedAt</div>
+  </div>
 </div>
 
 <div class="main">
 
   <div class="stats">
-    <div class="stat total">
-      <div class="stat-label">Total Users</div>
-      <div class="stat-number">$totalUsers</div>
-      <div class="stat-sub">in target group</div>
-    </div>
-    <div class="stat remaining">
-      <div class="stat-label">Not Started</div>
-      <div class="stat-number">$notStartedCount</div>
-      <div class="stat-sub">still to catch</div>
-    </div>
-    <div class="stat partial">
-      <div class="stat-label">Partial</div>
-      <div class="stat-number">$partialCount</div>
-      <div class="stat-sub">one method only</div>
-    </div>
-    <div class="stat complete">
-      <div class="stat-label">Fully Enrolled</div>
-      <div class="stat-number">$completeCount</div>
-      <div class="stat-sub">authenticator + WHfB</div>
-    </div>
+    $statCards
   </div>
 
   <div class="progress-wrap">
     <div class="progress-label">
       <span>Enrolment Progress</span>
-      <span><span class="c">$completeCount complete</span> &middot; <span class="p">$partialCount partial</span> &middot; <span class="r">$notStartedCount remaining</span></span>
+      <span><span style="color:var(--accent)">$completeCount complete</span>$progressPartialLabel &middot; <span style="color:var(--red)">$notStartedCount remaining</span></span>
     </div>
     <div class="progress-track">
       <div class="progress-complete"></div>
-      <div class="progress-partial"></div>
+      $progressPartialDiv
     </div>
   </div>
 
@@ -533,39 +474,24 @@ $html = @"
       <span class="section-count remaining">$notStartedCount</span>
     </div>
     <div class="table">
-      <div class="table-header">
-        <div>User</div><div>Authenticator App</div><div>Windows Hello</div><div>Status</div>
-      </div>
+      <div class="table-header">$tableHeaderHtml</div>
       $rowsNotStarted
     </div>
   </div>
 
-  <div class="section">
-    <div class="section-header">
-      <span class="section-title partial">Partially Enrolled</span>
-      <span class="section-count partial">$partialCount</span>
-    </div>
-    <div class="table">
-      <div class="table-header">
-        <div>User</div><div>Authenticator App</div><div>Windows Hello</div><div>Status</div>
-      </div>
-      $rowsPartial
-    </div>
-  </div>
+  $partialSection
 
   <div class="section">
     <div class="section-header">
       <button class="collapse-toggle" onclick="toggle()">
-        <span class="section-title complete">Fully Enrolled</span>
+        <span class="section-title complete">$completedLabel</span>
         <span class="section-count complete">$completeCount</span>
         <span class="chevron" id="chev">&#9658;</span>
       </button>
     </div>
     <div class="collapse-body" id="completedBody">
       <div class="table">
-        <div class="table-header">
-          <div>User</div><div>Authenticator App</div><div>Windows Hello</div><div>Status</div>
-        </div>
+        <div class="table-header">$tableHeaderHtml</div>
         $rowsComplete
       </div>
     </div>
@@ -574,7 +500,7 @@ $html = @"
 </div>
 
 <div class="footer">
-  Generated <span>$generatedAt</span> &middot; vibecoded by JS ⚡️
+  Generated <span>$generatedAt</span> &middot; vibecoded by JS &#9889;
 </div>
 
 <script>
@@ -593,12 +519,10 @@ try {
 } catch {
     Write-Host "  ERROR: Could not write output file." -ForegroundColor Red
     Write-Host "  $_" -ForegroundColor Red
-    Disconnect-MgGraph | Out-Null
     exit 1
 }
 
 Write-Host "  Report saved to: $OutputPath" -ForegroundColor Cyan
 Write-Host ""
-
 Write-Host "  Done." -ForegroundColor Green
 Write-Host ""
