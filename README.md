@@ -218,4 +218,4 @@ All other Graph calls use `Invoke-MgGraphRequest` directly to avoid module versi
 
 ## 👏 Credits
 
-Designed and built by [Joe Samuels](https://joesamuels.co.uk) at [REDACTED](https://beaconit.co.uk).
+vibecoded by JS ⚡
