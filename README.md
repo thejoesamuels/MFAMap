@@ -185,7 +185,9 @@ A user is **Fully Enrolled** only when both are registered.
 
 ## 🔒 Security
 
-**No data leaves your machine.** The script queries Microsoft Graph directly from your PowerShell session and writes output to a local HTML file. No third-party services, no telemetry, no logging endpoints.
+**No data leaves your machine.** The script queries Microsoft Graph directly from your PowerShell session and writes output to a local HTML file. No telemetry, no logging endpoints.
+
+**Note on Google Fonts.** The generated HTML report loads fonts from `fonts.googleapis.com` at open time. No user data is sent — it's a standard font request — but it does mean the report phones out to Google's CDN when opened in a browser. If you're working in a restricted or air-gapped environment the fonts will silently fall back to system fonts, but be aware the request is made.
 
 **Delegated permissions only.** The script authenticates as you — it can only see what your account can see. No application permissions, no background processes, no scheduled jobs.
 
