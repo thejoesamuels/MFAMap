@@ -4,7 +4,9 @@
 
 EnrolWatch generates a self-contained HTML dashboard showing MFA enrolment progress across a target Entra group. Run the script, pick a tracking mode, get a file. Open it in any browser, share it with anyone — no server, no login, no dependencies.
 
-![EnrolWatch dashboard preview](images/dashboard.png)
+<p align="center">
+  <img src="images/dashboard.png" alt="EnrolWatch dashboard preview" width="700">
+</p>
 
 ---
 
@@ -30,7 +32,9 @@ EnrolWatch generates a self-contained HTML dashboard showing MFA enrolment progr
 
 When you run the script you're prompted to choose what to track:
 
-![Mode selection prompt](images/modeselect.png)
+<p align="center">
+  <img src="images/modeselect.png" alt="Mode selection prompt" width="450">
+</p>
 
 | Mode | Tracks | Used for |
 |---|---|---|
