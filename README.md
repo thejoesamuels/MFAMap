@@ -4,7 +4,7 @@
 
 EnrolWatch generates a self-contained HTML dashboard showing MFA enrolment progress across a target Entra group. Run the script, pick a tracking mode, get a file. Open it in any browser, share it with anyone — no server, no login, no dependencies.
 
-![EnrolWatch dashboard preview](images/screenshots.png)
+![EnrolWatch dashboard preview](images/dashboard.png)
 
 ---
 
