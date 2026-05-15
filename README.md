@@ -22,7 +22,7 @@ EnrolWatch generates a self-contained HTML dashboard showing MFA enrolment progr
 - 📊 **Progress bar** — visual breakdown of complete, partial, and not-started at a glance
 - 📤 **Fully portable** — the output HTML file can be opened, shared, or emailed with no auth required
 - 🔄 **Re-run to refresh** — run the script again to regenerate with fresh data
-- 💾 **Session reuse** — sign in once, run as many times as you like in the same PowerShell session
+- 🔌 **Auto-disconnect** — the script disconnects from Microsoft Graph automatically on completion
 
 ---
 
@@ -50,7 +50,7 @@ Modes 2, 3, and 4 are binary — registered or not. Mode 1 includes a **Partiall
         ↓
 Choose tracking mode (1-4)
         ↓
-Connect-MgGraph  (sign in with your admin account, only first run)
+Connect-MgGraph  (sign in with your admin account each run)
         ↓
 Invoke-MgGraphRequest — direct Graph API calls
 /organization                                              (tenant display name)
@@ -58,6 +58,7 @@ Invoke-MgGraphRequest — direct Graph API calls
 /groups/{id}/members                                       (group membership)
 /users/{id}                                                (user display name + UPN)
 /users/{id}/authentication/microsoftAuthenticatorMethods   (mode 1, 3, 4)
+/users/{id}/authentication/softwareOathMethods             (mode 1, 3 — fallback if Authenticator not found)
 /users/{id}/authentication/windowsHelloForBusinessMethods  (mode 1, 2)
 /users/{id}/authentication/fido2Methods                    (mode 4)
         ↓
@@ -197,21 +198,15 @@ A user is **Fully Enrolled** only when both are registered.
 
 **Note on the consent prompt.** EnrolWatch uses `Connect-MgGraph` which routes through the shared Microsoft Graph Command Line Tools app registration. The consent screen may show a large list of permissions — these reflect the full history of that shared app in your tenant, not what EnrolWatch specifically requests. Only the five scopes listed above are requested at runtime.
 
-**Disconnect when you're done.** EnrolWatch deliberately keeps the Graph session alive between runs so you don't have to sign in repeatedly during a drop-in session. When you're finished, disconnect explicitly to invalidate the token:
-
-```powershell
-Disconnect-MgGraph
-```
-
-Closing the PowerShell window has the same effect since the token is session-scoped, but explicitly disconnecting is good hygiene — particularly when running against client tenants.
+**Automatic disconnect.** EnrolWatch calls `Disconnect-MgGraph` automatically at the end of each run and confirms the session was cleared. No manual cleanup required.
 
 ---
 
 ## 🔄 Refreshing during a session
 
-Re-run the script to generate a fresh report. Each run produces a new timestamped file so previous snapshots are preserved. The script stays signed in for the duration of your PowerShell session — you won't be prompted to sign in again unless the token has expired.
+Re-run the script to generate a fresh report. Each run produces a new timestamped file so previous snapshots are preserved. The script connects and disconnects fresh on every run — you may be prompted to sign in again, or silently re-authenticated via cached token depending on your session state.
 
-You can also switch modes between runs without re-authenticating — just choose a different number when prompted.
+You can switch modes between runs — just choose a different number when prompted.
 
 ---
 

@@ -85,7 +85,7 @@ Re-run the script at any point:
 .\EnrolWatch.ps1 -GroupId "your-group-object-id"
 ```
 
-Each run produces a new timestamped file so previous snapshots are preserved. You won't be prompted to sign in again as long as your PowerShell session is still active. You can switch modes between runs without re-authenticating.
+Each run produces a new timestamped file so previous snapshots are preserved. The script connects and disconnects fresh on every run — you may be prompted to sign in again, or silently re-authenticated via cached token depending on your session state. You can switch modes between runs.
 
 ---
 
