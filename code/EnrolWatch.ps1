@@ -585,7 +585,13 @@ try {
 Write-Host "  Report saved to: $OutputPath" -ForegroundColor Cyan
 Write-Host ""
 
-try { Disconnect-MgGraph -ErrorAction Stop | Out-Null } catch {}
+try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
+
+if (Get-MgContext) {
+    Write-Host "  WARNING: Could not disconnect from Microsoft Graph. Run Disconnect-MgGraph manually." -ForegroundColor Yellow
+} else {
+    Write-Host "  Disconnected from Microsoft Graph." -ForegroundColor DarkGray
+}
 
 Write-Host "  Done." -ForegroundColor Green
 Write-Host ""
