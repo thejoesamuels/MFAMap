@@ -170,6 +170,15 @@ foreach ($member in $members) {
         } catch {
             $fetchError = $true
         }
+
+        if (-not $hasAuthenticator -and -not $fetchError) {
+            try {
+                $oathResp = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/softwareOathMethods" -ErrorAction Stop
+                if (@($oathResp.value).Count -gt 0) { $hasAuthenticator = $true }
+            } catch {
+                $fetchError = $true
+            }
+        }
     }
 
     if ($mode -in @(1,2)) {
@@ -575,7 +584,8 @@ try {
 
 Write-Host "  Report saved to: $OutputPath" -ForegroundColor Cyan
 Write-Host ""
+
+try { Disconnect-MgGraph -ErrorAction Stop | Out-Null } catch {}
+
 Write-Host "  Done." -ForegroundColor Green
-Write-Host ""
-Write-Host "  Don't forget: Disconnect-MgGraph when finished." -ForegroundColor DarkGray
 Write-Host ""
