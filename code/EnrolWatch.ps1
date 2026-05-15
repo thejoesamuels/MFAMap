@@ -64,18 +64,14 @@ Write-Host ""
 # ── Connect ───────────────────────────────────────────────────────────────────
 Write-Host "  Connecting to Microsoft Graph..." -ForegroundColor DarkGray
 
-$existingContext = Get-MgContext
-if ($existingContext) {
-    Write-Host "  Already connected as $($existingContext.Account)" -ForegroundColor Green
-} else {
-    try {
-        Connect-MgGraph -Scopes "GroupMember.Read.All", "UserAuthenticationMethod.Read.All", "User.Read.All", "Group.Read.All", "Organization.Read.All" -NoWelcome -ErrorAction Stop
-        Write-Host "  Connected." -ForegroundColor Green
-    } catch {
-        Write-Host "  ERROR: Failed to connect to Microsoft Graph." -ForegroundColor Red
-        Write-Host "  $_" -ForegroundColor Red
-        exit 1
-    }
+try {
+    Connect-MgGraph -Scopes "GroupMember.Read.All", "UserAuthenticationMethod.Read.All", "User.Read.All", "Group.Read.All", "Organization.Read.All" -NoWelcome -ErrorAction Stop
+    $connectedAs = (Get-MgContext).Account
+    Write-Host "  Connected as $connectedAs" -ForegroundColor Green
+} catch {
+    Write-Host "  ERROR: Failed to connect to Microsoft Graph." -ForegroundColor Red
+    Write-Host "  $_" -ForegroundColor Red
+    exit 1
 }
 Write-Host ""
 
