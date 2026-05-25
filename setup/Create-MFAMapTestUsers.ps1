@@ -19,11 +19,11 @@
 # ============================================================================
 
 # ── Configuration — edit these before running ─────────────────────────────────
-$TenantDomain     = "contoso.onmicrosoft.com"   # your tenant's .onmicrosoft.com domain
-$TestPassword     = "MFAMap-Test-2024!"          # initial password for all test accounts
-$SmsPhoneNumber   = "+447700000001"              # E.164 format — used for SmsOnly + Mixed
-$VoicePhoneNumber = "+447700000002"              # E.164 format — used for VoiceOnly
-$TestEmailAddress = "mfamap-test@example.com"   # used for EmailOnly
+$TenantDomain     = "yourtenantname.onmicrosoft.com"   # your tenant's .onmicrosoft.com domain
+$TestPassword     = "YourTestPassword123!"          # initial password for all test accounts
+$SmsPhoneNumber   = "+11234567890"              # E.164 format — used for SmsOnly + Mixed
+$VoicePhoneNumber = "+11234567890"              # E.164 format — used for VoiceOnly
+$TestEmailAddress = "your-test-email@example.com"   # used for EmailOnly
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Module load ───────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ Write-Host "  Connecting to Microsoft Graph..." -ForegroundColor DarkGray
 
 try {
     Connect-MgGraph `
-        -Scopes "User.ReadWrite.All", "Group.ReadWrite.All", "GroupMember.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All" `
+        -Scopes "User.ReadWrite.All", "Group.ReadWrite.All", "GroupMember.ReadWrite.All", "UserAuthenticationMethod.ReadWrite.All", "Policy.Read.All" `
         -NoWelcome `
         -ErrorAction Stop
     $connectedAs = (Get-MgContext).Account
@@ -207,12 +207,50 @@ if ($groupId) {
 }
 Write-Host ""
 
+# Brief pause — newly created accounts sometimes take a moment to propagate
+# before authentication method endpoints become available
+Write-Host "  Waiting for accounts to propagate..." -ForegroundColor DarkGray
+Start-Sleep -Seconds 8
+Write-Host ""
+
 # ── Auth method setup ─────────────────────────────────────────────────────────
 Write-Host "  Configuring authentication methods..." -ForegroundColor DarkGray
 Write-Host ""
 
+# Check which methods are enabled in the tenant's Authentication Methods Policy.
+# Disabled methods cannot be set via the API — those users get added to manual steps.
+function Test-AuthMethodEnabled {
+    param ([string]$MethodId)
+    try {
+        $p = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/policies/authenticationMethodsPolicy/authenticationMethodConfigurations/$MethodId" -ErrorAction Stop
+        return ($p.state -eq "enabled")
+    } catch {
+        return $null  # unknown — will attempt and handle errors at set time
+    }
+}
+
+Write-Host "  Checking Authentication Methods Policy..." -ForegroundColor DarkGray
+$authMethodPolicy = @{
+    Sms          = Test-AuthMethodEnabled -MethodId "sms"
+    Voice        = Test-AuthMethodEnabled -MethodId "voice"
+    Email        = Test-AuthMethodEnabled -MethodId "email"
+    SoftwareOath = Test-AuthMethodEnabled -MethodId "softwareOath"
+}
+$policyLabels = @{ Sms = "SMS"; Voice = "Voice"; Email = "Email OTP"; SoftwareOath = "Software OATH" }
+foreach ($key in @("Sms", "Voice", "Email", "SoftwareOath")) {
+    $state = switch ($authMethodPolicy[$key]) {
+        $true  { "enabled" }
+        $false { "DISABLED — will skip, added to manual steps" }
+        default { "unknown (will attempt)" }
+    }
+    $color = if ($authMethodPolicy[$key] -eq $false) { "Yellow" } else { "DarkGray" }
+    Write-Host "    $($policyLabels[$key]): $state" -ForegroundColor $color
+}
+Write-Host ""
+
 $methodResults = @{}
 foreach ($name in $testUsers.Keys) { $methodResults[$name] = @() }
+$policySkipped = @()
 
 function Set-PhoneMethod {
     param ([string]$UserId, [string]$UserName, [string]$PhoneNumber, [string]$PhoneType, [string]$Label)
@@ -288,36 +326,61 @@ function Set-SoftwareOath {
 # Test-TotpOnly: Software OATH
 Write-Host "    Test-TotpOnly:" -ForegroundColor White
 if ($testUsers.ContainsKey("MFAMap-Test-TotpOnly")) {
-    $ok = Set-SoftwareOath -UserId $testUsers["MFAMap-Test-TotpOnly"].Id -UserName "MFAMap-Test-TotpOnly"
-    if ($ok) { $methodResults["MFAMap-Test-TotpOnly"] += "Software OATH (TOTP)" }
+    if ($authMethodPolicy.SoftwareOath -eq $false) {
+        Write-Host "      Skipped — Software OATH is disabled in the Authentication Methods Policy" -ForegroundColor Yellow
+        $policySkipped += "MFAMap-Test-TotpOnly  — Register: Software OATH token (TOTP)"
+    } else {
+        $ok = Set-SoftwareOath -UserId $testUsers["MFAMap-Test-TotpOnly"].Id -UserName "MFAMap-Test-TotpOnly"
+        if ($ok) { $methodResults["MFAMap-Test-TotpOnly"] += "Software OATH (TOTP)" }
+    }
 }
 
 # Test-SmsOnly: SMS (mobile)
 Write-Host "    Test-SmsOnly:" -ForegroundColor White
 if ($testUsers.ContainsKey("MFAMap-Test-SmsOnly")) {
-    $ok = Set-PhoneMethod -UserId $testUsers["MFAMap-Test-SmsOnly"].Id -UserName "MFAMap-Test-SmsOnly" -PhoneNumber $SmsPhoneNumber -PhoneType "mobile" -Label "SMS (mobile)"
-    if ($ok) { $methodResults["MFAMap-Test-SmsOnly"] += "SMS" }
+    if ($authMethodPolicy.Sms -eq $false) {
+        Write-Host "      Skipped — SMS is disabled in the Authentication Methods Policy" -ForegroundColor Yellow
+        $policySkipped += "MFAMap-Test-SmsOnly   — Register: SMS phone number ($SmsPhoneNumber)"
+    } else {
+        $ok = Set-PhoneMethod -UserId $testUsers["MFAMap-Test-SmsOnly"].Id -UserName "MFAMap-Test-SmsOnly" -PhoneNumber $SmsPhoneNumber -PhoneType "mobile" -Label "SMS (mobile)"
+        if ($ok) { $methodResults["MFAMap-Test-SmsOnly"] += "SMS" }
+    }
 }
 
-# Test-VoiceOnly: Voice (alternateMobile)
+# Test-VoiceOnly: Voice (office — alternateMobile requires a mobile number to exist first)
 Write-Host "    Test-VoiceOnly:" -ForegroundColor White
 if ($testUsers.ContainsKey("MFAMap-Test-VoiceOnly")) {
-    $ok = Set-PhoneMethod -UserId $testUsers["MFAMap-Test-VoiceOnly"].Id -UserName "MFAMap-Test-VoiceOnly" -PhoneNumber $VoicePhoneNumber -PhoneType "alternateMobile" -Label "Voice (alternateMobile)"
-    if ($ok) { $methodResults["MFAMap-Test-VoiceOnly"] += "Voice" }
+    if ($authMethodPolicy.Voice -eq $false) {
+        Write-Host "      Skipped — Voice is disabled in the Authentication Methods Policy" -ForegroundColor Yellow
+        $policySkipped += "MFAMap-Test-VoiceOnly — Register: Office phone number ($VoicePhoneNumber)"
+    } else {
+        $ok = Set-PhoneMethod -UserId $testUsers["MFAMap-Test-VoiceOnly"].Id -UserName "MFAMap-Test-VoiceOnly" -PhoneNumber $VoicePhoneNumber -PhoneType "office" -Label "Voice (office)"
+        if ($ok) { $methodResults["MFAMap-Test-VoiceOnly"] += "Voice" }
+    }
 }
 
 # Test-EmailOnly: Email OTP
 Write-Host "    Test-EmailOnly:" -ForegroundColor White
 if ($testUsers.ContainsKey("MFAMap-Test-EmailOnly")) {
-    $ok = Set-EmailMethod -UserId $testUsers["MFAMap-Test-EmailOnly"].Id -UserName "MFAMap-Test-EmailOnly" -EmailAddress $TestEmailAddress
-    if ($ok) { $methodResults["MFAMap-Test-EmailOnly"] += "Email OTP" }
+    if ($authMethodPolicy.Email -eq $false) {
+        Write-Host "      Skipped — Email OTP is disabled in the Authentication Methods Policy" -ForegroundColor Yellow
+        $policySkipped += "MFAMap-Test-EmailOnly — Register: Email OTP ($TestEmailAddress)"
+    } else {
+        $ok = Set-EmailMethod -UserId $testUsers["MFAMap-Test-EmailOnly"].Id -UserName "MFAMap-Test-EmailOnly" -EmailAddress $TestEmailAddress
+        if ($ok) { $methodResults["MFAMap-Test-EmailOnly"] += "Email OTP" }
+    }
 }
 
 # Test-Mixed: SMS (Authenticator push done manually)
 Write-Host "    Test-Mixed:" -ForegroundColor White
 if ($testUsers.ContainsKey("MFAMap-Test-Mixed")) {
-    $ok = Set-PhoneMethod -UserId $testUsers["MFAMap-Test-Mixed"].Id -UserName "MFAMap-Test-Mixed" -PhoneNumber $SmsPhoneNumber -PhoneType "mobile" -Label "SMS (mobile)"
-    if ($ok) { $methodResults["MFAMap-Test-Mixed"] += "SMS" }
+    if ($authMethodPolicy.Sms -eq $false) {
+        Write-Host "      Skipped — SMS is disabled in the Authentication Methods Policy" -ForegroundColor Yellow
+        $policySkipped += "MFAMap-Test-Mixed     — Register: SMS phone number ($SmsPhoneNumber)"
+    } else {
+        $ok = Set-PhoneMethod -UserId $testUsers["MFAMap-Test-Mixed"].Id -UserName "MFAMap-Test-Mixed" -PhoneNumber $SmsPhoneNumber -PhoneType "mobile" -Label "SMS (mobile)"
+        if ($ok) { $methodResults["MFAMap-Test-Mixed"] += "SMS" }
+    }
 }
 
 Write-Host ""
@@ -381,8 +444,8 @@ if ($groupId) {
 # ── Summary: manual steps ─────────────────────────────────────────────────────
 Write-Host "  MANUAL STEPS REQUIRED" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  The following methods cannot be set via the API and must be registered" -ForegroundColor White
-Write-Host "  manually. In Entra admin center (entra.microsoft.com):" -ForegroundColor White
+Write-Host "  The following methods require a device and must be registered manually." -ForegroundColor White
+Write-Host "  In Entra admin center (entra.microsoft.com):" -ForegroundColor White
 Write-Host "  Users → [user] → Authentication methods → Add method" -ForegroundColor White
 Write-Host ""
 Write-Host "  1. MFAMap-Test-FullModern" -ForegroundColor White
@@ -400,7 +463,27 @@ Write-Host "     Register: FIDO2 security key or Authenticator device-bound pass
 Write-Host ""
 Write-Host "  5. MFAMap-Test-Mixed" -ForegroundColor White
 Write-Host "     Register: Microsoft Authenticator (push notification)" -ForegroundColor Gray
-Write-Host "     (SMS has already been set automatically)" -ForegroundColor DarkGray
+$mixedSmsNote = if ($methodResults.ContainsKey("MFAMap-Test-Mixed") -and $methodResults["MFAMap-Test-Mixed"] -contains "SMS") {
+    "(SMS has already been set automatically)"
+} else {
+    "(SMS also required — see policy steps below)"
+}
+Write-Host "     $mixedSmsNote" -ForegroundColor DarkGray
 Write-Host ""
+
+if ($policySkipped.Count -gt 0) {
+    Write-Host "  POLICY-DISABLED METHODS — additional manual steps" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  These were skipped because the method is disabled in your tenant's" -ForegroundColor White
+    Write-Host "  Authentication Methods Policy. Enable each one first at:" -ForegroundColor White
+    Write-Host "  entra.microsoft.com → Protection → Authentication methods → [method] → Enable" -ForegroundColor White
+    Write-Host "  Then add the method manually in Entra admin center, or re-run this script." -ForegroundColor White
+    Write-Host ""
+    foreach ($item in $policySkipped) {
+        Write-Host "  - $item" -ForegroundColor Gray
+    }
+    Write-Host ""
+}
+
 Write-Host "  ─────────────────────────────────────────────────────────────────" -ForegroundColor DarkGray
 Write-Host ""

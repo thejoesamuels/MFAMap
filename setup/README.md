@@ -8,13 +8,14 @@ This script creates the 10 test users and group required to run the MFAMap test 
 
 - Creates 10 test user accounts in your Entra tenant (or skips them if they already exist)
 - Creates `MFAMap-Test-Group` and adds all 10 users as members
-- Configures the following authentication methods automatically:
+- Checks your tenant's **Authentication Methods Policy** for each automated method before trying to set it
+- Configures the following authentication methods automatically (if enabled in your tenant policy):
   - **Software OATH (TOTP)** — for `MFAMap-Test-TotpOnly` (registered and activated)
   - **SMS** — for `MFAMap-Test-SmsOnly` and `MFAMap-Test-Mixed`
   - **Voice** — for `MFAMap-Test-VoiceOnly`
   - **Email OTP** — for `MFAMap-Test-EmailOnly`
 - Prints the Group Object ID ready to paste into MFAMap
-- Lists the remaining manual steps (Authenticator push, Windows Hello for Business, FIDO2)
+- Lists manual steps for device-bound methods (Authenticator push, Windows Hello for Business, FIDO2) and any methods skipped due to policy
 
 ---
 
@@ -26,6 +27,8 @@ This script creates the 10 test users and group required to run the MFAMap test 
   Install-Module Microsoft.Graph -Scope CurrentUser -Force
   ```
 - An admin account with **User Administrator** or **Authentication Administrator** role in the test tenant
+
+> The script requests `Policy.Read.All` at sign-in to check which authentication methods are enabled in your tenant before attempting to set them. If a method is disabled, it is skipped and listed as a manual step in the output rather than failing with an error.
 
 ---
 
@@ -72,9 +75,26 @@ The script prints three things at the end:
    ```powershell
    .\code\MFAMap.ps1 -GroupId "<printed-id>"
    ```
-3. **Manual steps** — a numbered list of the Authenticator, Windows Hello for Business, and FIDO2 registrations that require a physical device and must be done via Entra admin center
+3. **Manual steps** — device-bound methods (Authenticator push, Windows Hello for Business, FIDO2) that always need manual setup, plus any policy-disabled methods that were skipped
 
 Complete the manual steps before running the full test suite. See [TESTING.md](../TESTING.md) for the per-mode verification checklists.
+
+---
+
+## Authentication Methods Policy
+
+The script checks your tenant's Authentication Methods Policy (`entra.microsoft.com → Protection → Authentication methods`) before attempting each automated method. If a method shows as **DISABLED** in the policy check output, the affected users are listed under **POLICY-DISABLED METHODS** in the summary.
+
+To enable a method: go to **Protection → Authentication methods → [method name] → Enable**, then either re-run the script or add the method manually via Entra admin center.
+
+The four checked methods and their policy names:
+
+| Method | Policy name in Entra admin center |
+|---|---|
+| SMS | Microsoft Authenticator / SMS sign-in |
+| Voice | Voice call |
+| Email OTP | Email OTP |
+| Software OATH (TOTP) | Software OATH token |
 
 ---
 
