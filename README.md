@@ -1,10 +1,10 @@
-# ⚡ EnrolWatch
+# ⚡ MFAMap
 
-**MFA enrolment tracker for Microsoft Entra ID**
+**Authentication method mapper for Microsoft Entra ID**
 
-EnrolWatch generates a self-contained HTML dashboard showing MFA enrolment progress across a target Entra group. Run the script, pick a tracking mode, get a file. Open it in any browser, share it with anyone — no server, no login, no dependencies.
+MFAMap generates a self-contained HTML dashboard showing authentication method registration across a target Entra group. Run the script, pick a tracking mode, get a file. Open it in any browser, share it with anyone — no server, no login, no dependencies.
 
-<img src="images/dashboard.png" alt="EnrolWatch dashboard preview" width="600">
+<img src="images/dashboard.png" alt="MFAMap dashboard preview" width="600">
 
 ---
 
@@ -46,7 +46,7 @@ Modes 2, 3, and 4 are binary — registered or not. Mode 1 includes a **Partiall
 ## 🔧 How it works
 
 ```
-.\EnrolWatch.ps1 -GroupId "your-group-id"
+.\MFAMap.ps1 -GroupId "your-group-id"
         ↓
 Choose tracking mode (1-4)
         ↓
@@ -63,7 +63,7 @@ Invoke-MgGraphRequest — direct Graph API calls
 /users/{id}/authentication/fido2Methods                    (mode 4)
         ↓
 Self-contained HTML file written to disk
-enrolwatch_GroupName_Mode1-Auth-WHfB_2026-04-23_0941.html
+mfamap_GroupName_Mode1-Auth-WHfB_2026-04-23_0941.html
         ↓
 Open in any browser — no auth, no server, no dependencies
 ```
@@ -72,7 +72,7 @@ Open in any browser — no auth, no server, no dependencies
 
 ## 🛡️ Permissions
 
-EnrolWatch uses `Connect-MgGraph` with delegated permissions — it authenticates as you, using your existing admin account. No app registration is required.
+MFAMap uses `Connect-MgGraph` with delegated permissions — it authenticates as you, using your existing admin account. No app registration is required.
 
 The script requests five Graph scopes at sign-in:
 
@@ -111,7 +111,7 @@ In [entra.microsoft.com](https://entra.microsoft.com) → **Groups** → find yo
 **3. Run the script**
 
 ```powershell
-.\EnrolWatch.ps1 -GroupId "your-group-object-id"
+.\MFAMap.ps1 -GroupId "your-group-object-id"
 ```
 
 When prompted, pick a tracking mode (1-4). Sign in with your Microsoft admin account when prompted. The script generates a timestamped HTML report in the current directory.
@@ -121,7 +121,7 @@ When prompted, pick a tracking mode (1-4). Sign in with your Microsoft admin acc
 The script prints the exact filename on completion:
 
 ```
-  Report saved to: .\enrolwatch_Staff_Mode1-Auth-WHfB_2026-06-01_0930.html
+  Report saved to: .\mfamap_Staff_Mode1-Auth-WHfB_2026-06-01_0930.html
 ```
 
 Double-click the file or open it in any browser.
@@ -139,10 +139,10 @@ Double-click the file or open it in any browser.
 
 ```powershell
 # Basic — output file named automatically from group name, mode, and timestamp
-.\EnrolWatch.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00"
+.\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00"
 
 # Custom output path (overrides auto-naming)
-.\EnrolWatch.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -OutputPath "C:\Reports\mfa-report.html"
+.\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -OutputPath "C:\Reports\mfa-report.html"
 ```
 
 ---
@@ -196,9 +196,9 @@ A user is **Fully Enrolled** only when both are registered.
 
 **Treat the output file as internal data.** It contains names, email addresses, and MFA status of your users. Share it only with people who should have that information.
 
-**Note on the consent prompt.** EnrolWatch uses `Connect-MgGraph` which routes through the shared Microsoft Graph Command Line Tools app registration. The consent screen may show a large list of permissions — these reflect the full history of that shared app in your tenant, not what EnrolWatch specifically requests. Only the five scopes listed above are requested at runtime.
+**Note on the consent prompt.** MFAMap uses `Connect-MgGraph` which routes through the shared Microsoft Graph Command Line Tools app registration. The consent screen may show a large list of permissions — these reflect the full history of that shared app in your tenant, not what MFAMap specifically requests. Only the five scopes listed above are requested at runtime.
 
-**Automatic disconnect.** EnrolWatch calls `Disconnect-MgGraph` automatically at the end of each run and confirms the session was cleared. No manual cleanup required.
+**Automatic disconnect.** MFAMap calls `Disconnect-MgGraph` automatically at the end of each run and confirms the session was cleared. No manual cleanup required.
 
 ---
 

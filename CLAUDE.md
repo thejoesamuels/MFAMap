@@ -4,19 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-EnrolWatch is a single-file PowerShell script (`code/EnrolWatch.ps1`) that queries Microsoft Graph for MFA enrolment status across a target Entra group and generates a self-contained HTML report. No build system, no tests, no package manager.
+MFAMap is a single-file PowerShell script (`code/MFAMap.ps1`) that maps and audits authentication method registration across a target Entra group via Microsoft Graph and generates a self-contained HTML report. No build system, no tests, no package manager.
 
 ## Running the script
 
 ```powershell
 # Basic run — prompts for mode, auto-names output file
-.\code\EnrolWatch.ps1 -GroupId "your-group-object-id"
+.\code\MFAMap.ps1 -GroupId "your-group-object-id"
 
 # Custom output path
-.\code\EnrolWatch.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\report.html"
+.\code\MFAMap.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\report.html"
 
 # If execution policy blocks it
-PowerShell -ExecutionPolicy Bypass -File .\code\EnrolWatch.ps1 -GroupId "your-group-object-id"
+PowerShell -ExecutionPolicy Bypass -File .\code\MFAMap.ps1 -GroupId "your-group-object-id"
 ```
 
 One-time dependency install:

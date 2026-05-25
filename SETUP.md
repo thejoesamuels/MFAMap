@@ -1,8 +1,8 @@
-# EnrolWatch — Setup Guide
+# MFAMap — Setup Guide
 
 ## What this is
 
-A PowerShell script that signs into Microsoft Graph with your admin account, queries a target Entra group for MFA registration status, and generates a self-contained HTML report. No app registration, no server, no browser auth required.
+A PowerShell script that signs into Microsoft Graph with your admin account, queries a target Entra group for authentication method registration status, and generates a self-contained HTML report. No app registration, no server, no browser auth required.
 
 When you run it, you're prompted to choose what to track:
 - **Mode 1** — Microsoft Authenticator + Windows Hello for Business
@@ -30,7 +30,7 @@ Install-Module Microsoft.Graph -Scope CurrentUser -Force
 
 This installs the full Microsoft Graph module. If prompted to trust the PSGallery repository, type `Y` and press Enter. This may take a few minutes.
 
-> **Note:** EnrolWatch only loads `Microsoft.Graph.Authentication` and `Microsoft.Graph.Groups` at runtime. All other Graph calls use `Invoke-MgGraphRequest` directly to avoid module version conflicts.
+> **Note:** MFAMap only loads `Microsoft.Graph.Authentication` and `Microsoft.Graph.Groups` at runtime. All other Graph calls use `Invoke-MgGraphRequest` directly to avoid module version conflicts.
 
 ---
 
@@ -47,13 +47,13 @@ This installs the full Microsoft Graph module. If prompted to trust the PSGaller
 In PowerShell, navigate to the folder containing the script and run:
 
 ```powershell
-.\EnrolWatch.ps1 -GroupId "your-group-object-id"
+.\MFAMap.ps1 -GroupId "your-group-object-id"
 ```
 
 If you see an execution policy error:
 
 ```powershell
-PowerShell -ExecutionPolicy Bypass -File .\EnrolWatch.ps1 -GroupId "your-group-object-id"
+PowerShell -ExecutionPolicy Bypass -File .\MFAMap.ps1 -GroupId "your-group-object-id"
 ```
 
 The script will:
@@ -70,7 +70,7 @@ The script will:
 The script prints the exact output filename on completion:
 
 ```
-  Report saved to: .\enrolwatch_Staff_Mode1-Auth-WHfB_2026-06-01_0930.html
+  Report saved to: .\mfamap_Staff_Mode1-Auth-WHfB_2026-06-01_0930.html
 ```
 
 Double-click the file or open it in any browser. No login required.
@@ -82,7 +82,7 @@ Double-click the file or open it in any browser. No login required.
 Re-run the script at any point:
 
 ```powershell
-.\EnrolWatch.ps1 -GroupId "your-group-object-id"
+.\MFAMap.ps1 -GroupId "your-group-object-id"
 ```
 
 Each run produces a new timestamped file so previous snapshots are preserved. The script connects and disconnects fresh on every run — you may be prompted to sign in again, or silently re-authenticated via cached token depending on your session state. You can switch modes between runs.
@@ -94,14 +94,14 @@ Each run produces a new timestamped file so previous snapshots are preserved. Th
 Use `-OutputPath` to override the auto-generated filename:
 
 ```powershell
-.\EnrolWatch.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\mfa-report.html"
+.\MFAMap.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\mfa-report.html"
 ```
 
 ---
 
 ## Running on macOS or Linux
 
-EnrolWatch works on PowerShell 7+ on macOS and Linux. Install PowerShell 7 via Homebrew on macOS:
+MFAMap works on PowerShell 7+ on macOS and Linux. Install PowerShell 7 via Homebrew on macOS:
 
 ```bash
 brew install --cask powershell
@@ -115,7 +115,7 @@ Then launch it with `pwsh` and follow the same steps.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Execution policy error | Script not signed | Run with `PowerShell -ExecutionPolicy Bypass -File .\EnrolWatch.ps1 -GroupId "..."` or run `Set-ExecutionPolicy -Scope CurrentUser Unrestricted` |
+| Execution policy error | Script not signed | Run with `PowerShell -ExecutionPolicy Bypass -File .\MFAMap.ps1 -GroupId "..."` or run `Set-ExecutionPolicy -Scope CurrentUser Unrestricted` |
 | `Could not retrieve group members` | Wrong Group ID or insufficient permissions | Double-check the Object ID in Entra; confirm your account has Authentication Administrator or Global Reader |
 | `No users found in this group` | Module version conflict or group has no direct user members | Reinstall modules cleanly (see below); confirm group has direct user members in Entra |
 | `WARNING: Could not retrieve tenant name` | `Organization.Read.All` not consented | Non-fatal — report still generates without the tenant name |
@@ -136,9 +136,9 @@ Install-Module Microsoft.Graph -Scope CurrentUser -Force
 
 ## About the consent prompt
 
-When you sign in, you may see a consent screen from **Microsoft Graph Command Line Tools** listing a large number of permissions. This is the shared app registration that the Graph PowerShell SDK uses — the list reflects its full permission history in your tenant, not what EnrolWatch specifically requests.
+When you sign in, you may see a consent screen from **Microsoft Graph Command Line Tools** listing a large number of permissions. This is the shared app registration that the Graph PowerShell SDK uses — the list reflects its full permission history in your tenant, not what MFAMap specifically requests.
 
-EnrolWatch only requests these five scopes at runtime:
+MFAMap only requests these five scopes at runtime:
 - `Organization.Read.All`
 - `Group.Read.All`
 - `GroupMember.Read.All`

@@ -1,6 +1,6 @@
 ﻿# ============================================================================
-# EnrolWatch.ps1
-# MFA enrolment tracker for Microsoft Entra ID
+# MFAMap.ps1
+# Authentication method mapper for Microsoft Entra ID
 #
 # Modes:
 #   1 — Microsoft Authenticator + Windows Hello for Business
@@ -9,8 +9,8 @@
 #   4 — Passkey (FIDO2 or Authenticator device-bound passkey)
 #
 # Usage:
-#   .\EnrolWatch.ps1 -GroupId "your-group-object-id"
-#   .\EnrolWatch.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\report.html"
+#   .\MFAMap.ps1 -GroupId "your-group-object-id"
+#   .\MFAMap.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\report.html"
 #
 # Requirements:
 #   Install-Module Microsoft.Graph -Scope CurrentUser -Force
@@ -31,8 +31,8 @@ Get-Module Microsoft.Graph.Groups         -ListAvailable | Sort-Object Version -
 
 # ── Mode selection ────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "  EnrolWatch" -ForegroundColor Cyan
-Write-Host "  MFA Enrolment Tracker" -ForegroundColor DarkGray
+Write-Host "  MFAMap" -ForegroundColor Cyan
+Write-Host "  Authentication Method Mapper" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Select tracking mode:" -ForegroundColor White
 Write-Host "  [1]  Authenticator App + Windows Hello for Business" -ForegroundColor Gray
@@ -101,7 +101,7 @@ try {
 if ($OutputPath -eq "") {
     $safeName  = $groupName -replace '[^\w\s-]', '' -replace '\s+', '-'
     $timestamp = Get-Date -Format "yyyy-MM-dd_HHmm"
-    $OutputPath = ".\enrolwatch_${safeName}_${modeShort}_${timestamp}.html"
+    $OutputPath = ".\mfamap_${safeName}_${modeShort}_${timestamp}.html"
 }
 Write-Host ""
 
@@ -153,7 +153,7 @@ $i = 0
 
 foreach ($member in $members) {
     $i++
-    Write-Progress -Activity "EnrolWatch" -Status "Checking $($member.DisplayName) ($i of $totalCount)" -PercentComplete (($i / $totalCount) * 100)
+    Write-Progress -Activity "MFAMap" -Status "Checking $($member.DisplayName) ($i of $totalCount)" -PercentComplete (($i / $totalCount) * 100)
 
     $hasAuthenticator = $false
     $hasWHfB          = $false
@@ -215,7 +215,7 @@ foreach ($member in $members) {
     }
 }
 
-Write-Progress -Activity "EnrolWatch" -Completed
+Write-Progress -Activity "MFAMap" -Completed
 
 if ($errorUsers.Count -gt 0) {
     Write-Host ""
@@ -414,7 +414,7 @@ $html = @"
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EnrolWatch &mdash; $safeGroupName</title>
+<title>MFAMap &mdash; $safeGroupName</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -499,7 +499,7 @@ $html = @"
   <div class="header-left">
     <div class="logo">&#9889;</div>
     <div>
-      <div class="header-title">MFA Enrolment Tracker</div>
+      <div class="header-title">Authentication Method Map</div>
       <div class="header-subtitle">$headerSubtitle</div>
     </div>
   </div>
