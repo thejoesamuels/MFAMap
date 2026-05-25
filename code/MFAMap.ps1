@@ -7,6 +7,7 @@
 #   2 — Windows Hello for Business only
 #   3 — Microsoft Authenticator only
 #   4 — Passkey (FIDO2 or Authenticator device-bound passkey)
+#   5 — Full method audit (all authentication methods)
 #
 # Usage:
 #   .\MFAMap.ps1 -GroupId "your-group-object-id"
@@ -39,9 +40,10 @@ Write-Host "  [1]  Authenticator App + Windows Hello for Business" -ForegroundCo
 Write-Host "  [2]  Windows Hello for Business only" -ForegroundColor Gray
 Write-Host "  [3]  Authenticator App only" -ForegroundColor Gray
 Write-Host "  [4]  Passkey (FIDO2 or Authenticator device-bound passkey)" -ForegroundColor Gray
+Write-Host "  [5]  Full method audit (all authentication methods)" -ForegroundColor Gray
 Write-Host ""
 
-do { $modeInput = Read-Host "  Enter choice (1-4)" } while ($modeInput -notin @('1','2','3','4'))
+do { $modeInput = Read-Host "  Enter choice (1-5)" } while ($modeInput -notin @('1','2','3','4','5'))
 $mode = [int]$modeInput
 
 $modeLabel = switch ($mode) {
@@ -49,12 +51,14 @@ $modeLabel = switch ($mode) {
     2 { "Windows Hello for Business" }
     3 { "Microsoft Authenticator" }
     4 { "Passkey" }
+    5 { "Full Method Audit" }
 }
 $modeShort = switch ($mode) {
     1 { "Mode1-Auth-WHfB" }
     2 { "Mode2-WHfB" }
     3 { "Mode3-Auth" }
     4 { "Mode4-Passkey" }
+    5 { "Mode5-Audit" }
 }
 
 Write-Host ""
@@ -159,6 +163,12 @@ foreach ($member in $members) {
     $hasWHfB          = $false
     $hasPasskey       = $false
     $fetchError       = $false
+    $isTotpOnly       = $false
+    $hasFido2         = $false
+    $hasSoftwareOath  = $false
+    $hasSms           = $false
+    $hasVoice         = $false
+    $hasEmail         = $false
 
     # Only fetch what we need based on mode
     if ($mode -in @(1,3,4)) {
@@ -174,7 +184,10 @@ foreach ($member in $members) {
         if (-not $hasAuthenticator -and -not $fetchError) {
             try {
                 $oathResp = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/softwareOathMethods" -ErrorAction Stop
-                if (@($oathResp.value).Count -gt 0) { $hasAuthenticator = $true }
+                if (@($oathResp.value).Count -gt 0) {
+                    $hasAuthenticator = $true
+                    $isTotpOnly       = $true
+                }
             } catch {
                 $fetchError = $true
             }
@@ -199,6 +212,43 @@ foreach ($member in $members) {
         }
     }
 
+    if ($mode -eq 5) {
+        try {
+            $authResp5 = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/microsoftAuthenticatorMethods" -ErrorAction Stop
+            $hasAuthenticator = @($authResp5.value).Count -gt 0
+        } catch { $fetchError = $true }
+
+        try {
+            $whfbResp5 = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/windowsHelloForBusinessMethods" -ErrorAction Stop
+            $hasWHfB = @($whfbResp5.value).Count -gt 0
+        } catch { $fetchError = $true }
+
+        try {
+            $fido2Resp5 = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/fido2Methods" -ErrorAction Stop
+            $hasFido2 = @($fido2Resp5.value).Count -gt 0
+        } catch { $fetchError = $true }
+
+        try {
+            $oathResp5 = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/softwareOathMethods" -ErrorAction Stop
+            $hasSoftwareOath = @($oathResp5.value).Count -gt 0
+        } catch { $fetchError = $true }
+
+        try {
+            $phoneResp = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/phoneMethods" -ErrorAction Stop
+            $phoneMethods = @($phoneResp.value)
+            $hasSms   = ($phoneMethods | Where-Object { $_.phoneType -eq 'mobile' }).Count -gt 0
+            $hasVoice = ($phoneMethods | Where-Object { $_.phoneType -in @('alternateMobile','office') }).Count -gt 0
+        } catch { $fetchError = $true }
+
+        try {
+            $emailResp = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($member.Id)/authentication/emailMethods" -ErrorAction Stop
+            $hasEmail = @($emailResp.value).Count -gt 0
+        } catch { $fetchError = $true }
+
+        $isLegacyOnly5 = (-not $hasAuthenticator -and -not $hasWHfB -and -not $hasFido2 -and -not $hasSoftwareOath) -and ($hasSms -or $hasVoice -or $hasEmail)
+        $noMethods5    = (-not $hasAuthenticator -and -not $hasWHfB -and -not $hasFido2 -and -not $hasSoftwareOath -and -not $hasSms -and -not $hasVoice -and -not $hasEmail)
+    }
+
     if ($fetchError) {
         $errorUsers += [PSCustomObject]@{
             Name  = $member.DisplayName
@@ -211,6 +261,14 @@ foreach ($member in $members) {
             HasAuthenticator = $hasAuthenticator
             HasWHfB          = $hasWHfB
             HasPasskey       = $hasPasskey
+            IsTotpOnly       = $isTotpOnly
+            HasFido2         = $hasFido2
+            HasSoftwareOath  = $hasSoftwareOath
+            HasSms           = $hasSms
+            HasVoice         = $hasVoice
+            HasEmail         = $hasEmail
+            IsLegacyOnly     = if ($mode -eq 5) { $isLegacyOnly5 } else { $false }
+            NoMethods        = if ($mode -eq 5) { $noMethods5    } else { $false }
         }
     }
 }
@@ -245,6 +303,14 @@ switch ($mode) {
         $partial    = @()
         $complete   = @($users | Where-Object { $_.HasPasskey })
     }
+    5 {
+        $notStarted      = @()
+        $partial         = @()
+        $complete        = @()
+        $noMethodsGroup  = @($users | Where-Object { $_.NoMethods })
+        $legacyOnlyGroup = @($users | Where-Object { $_.IsLegacyOnly })
+        $modernGroup     = @($users | Where-Object { -not $_.NoMethods -and -not $_.IsLegacyOnly })
+    }
 }
 
 $totalUsers      = $users.Count
@@ -257,10 +323,16 @@ $pctPartial  = if ($totalUsers -gt 0) { [math]::Round(($partialCount  / $totalUs
 
 Write-Host ""
 Write-Host "  Results:" -ForegroundColor Cyan
-Write-Host "    Total:        $totalUsers"      -ForegroundColor White
-Write-Host "    Not started:  $notStartedCount" -ForegroundColor Red
-if ($partialCount -gt 0) { Write-Host "    Partial:      $partialCount" -ForegroundColor Yellow }
-Write-Host "    Complete:     $completeCount"   -ForegroundColor Green
+Write-Host "    Total:        $totalUsers" -ForegroundColor White
+if ($mode -eq 5) {
+    Write-Host "    No methods:   $($noMethodsGroup.Count)"  -ForegroundColor Red
+    Write-Host "    Legacy only:  $($legacyOnlyGroup.Count)" -ForegroundColor Yellow
+    Write-Host "    Modern:       $($modernGroup.Count)"     -ForegroundColor Green
+} else {
+    Write-Host "    Not registered: $notStartedCount" -ForegroundColor Red
+    if ($partialCount -gt 0) { Write-Host "    Partial:      $partialCount" -ForegroundColor Yellow }
+    Write-Host "    Complete:     $completeCount"   -ForegroundColor Green
+}
 Write-Host ""
 
 # ── Mode-specific accent colour ───────────────────────────────────────────────
@@ -269,12 +341,14 @@ $accentColor = switch ($mode) {
     2 { "#7b6ff0" }  # purple
     3 { "#43C0B9" }  # teal
     4 { "#f0a843" }  # amber
+    5 { "#4B9EE8" }  # blue
 }
 $accentDim = switch ($mode) {
     1 { "rgba(67,192,185,0.15)" }
     2 { "rgba(123,111,240,0.15)" }
     3 { "rgba(67,192,185,0.15)" }
     4 { "rgba(240,168,67,0.15)" }
+    5 { "rgba(75,158,232,0.15)" }
 }
 
 # ── HTML helpers ──────────────────────────────────────────────────────────────
@@ -287,8 +361,23 @@ function Get-MethodCells($u, [int]$m) {
     switch ($m) {
         1 { return "<div>$(Get-Badge $u.HasAuthenticator)</div><div>$(Get-Badge $u.HasWHfB)</div>" }
         2 { return "<div>$(Get-Badge $u.HasWHfB)</div>" }
-        3 { return "<div>$(Get-Badge $u.HasAuthenticator)</div>" }
+        3 {
+            if ($u.IsTotpOnly) { return "<div><span class=`"badge warn`">&#10003; TOTP only</span></div>" }
+            else               { return "<div>$(Get-Badge $u.HasAuthenticator)</div>" }
+        }
         4 { return "<div>$(Get-Badge $u.HasPasskey)</div>" }
+        5 {
+            $tick = "&#10003;"
+            $dash = "&ndash;"
+            $auth  = if ($u.HasAuthenticator) { $tick } else { $dash }
+            $whfb  = if ($u.HasWHfB)          { $tick } else { $dash }
+            $fido  = if ($u.HasFido2)          { $tick } else { $dash }
+            $oath  = if ($u.HasSoftwareOath)   { $tick } else { $dash }
+            $sms   = if ($u.HasSms)            { $tick } else { $dash }
+            $voice = if ($u.HasVoice)          { $tick } else { $dash }
+            $email = if ($u.HasEmail)          { $tick } else { $dash }
+            return "<div>$auth</div><div>$whfb</div><div>$fido</div><div>$oath</div><div>$sms</div><div>$voice</div><div>$email</div>"
+        }
     }
 }
 
@@ -298,20 +387,27 @@ function Get-TableHeader([int]$m) {
         2 { return "<div>User</div><div>Windows Hello</div><div>Status</div>" }
         3 { return "<div>User</div><div>Authenticator App</div><div>Status</div>" }
         4 { return "<div>User</div><div>Passkey</div><div>Status</div>" }
+        5 { return "<div>User</div><div>Auth App</div><div>WHfB</div><div>FIDO2</div><div>Soft. OATH</div><div>SMS</div><div>Voice</div><div>Email OTP</div><div>Status</div>" }
     }
 }
 
 function Get-GridCols([int]$m) {
-    if ($m -eq 1) { return "1fr 170px 170px 110px" }
-    else          { return "1fr 200px 110px" }
+    switch ($m) {
+        1       { return "1fr 170px 170px 110px" }
+        5       { return "1fr 90px 80px 80px 110px 60px 70px 90px 110px" }
+        default { return "1fr 200px 110px" }
+    }
 }
 
 function Get-Rows($userList, [string]$statusType, [int]$m) {
     if ($userList.Count -eq 0) {
         $msg = switch ($statusType) {
-            "none"    { "Everyone has started enrolment &#127881;" }
-            "partial" { "No partial enrolments" }
-            "done"    { "No completed enrolments yet" }
+            "none"        { "Everyone has started enrolment &#127881;" }
+            "partial"     { "No partial enrolments" }
+            "done"        { "No completed enrolments yet" }
+            "no-methods"  { "No users without a registered method &#127881;" }
+            "legacy-only" { "No legacy-only users" }
+            "modern"      { "No users with modern methods yet" }
         }
         return "<div class=`"empty`">$msg</div>"
     }
@@ -319,9 +415,12 @@ function Get-Rows($userList, [string]$statusType, [int]$m) {
     foreach ($u in $userList) {
         $methodCells = Get-MethodCells $u $m
         $pill = switch ($statusType) {
-            "done"    { if ($m -eq 1) { '<span class="pill done">Complete</span>' } else { '<span class="pill done">Registered</span>' } }
-            "partial" { '<span class="pill partial">Partial</span>' }
-            "none"    { if ($m -eq 1) { '<span class="pill none">Not started</span>' } else { '<span class="pill none">Not registered</span>' } }
+            "done"        { if ($m -eq 1) { '<span class="pill done">Complete</span>' } else { '<span class="pill done">Registered</span>' } }
+            "partial"     { '<span class="pill partial">Partial</span>' }
+            "none"        { '<span class="pill none">Not registered</span>' }
+            "no-methods"  { '<span class="pill none">No methods</span>' }
+            "legacy-only" { '<span class="pill partial">Legacy only</span>' }
+            "modern"      { '<span class="pill done">&#10003;</span>' }
         }
         $safeName  = [System.Web.HttpUtility]::HtmlEncode($u.Name)
         $safeEmail = [System.Web.HttpUtility]::HtmlEncode($u.Email)
@@ -336,11 +435,17 @@ function Get-Rows($userList, [string]$statusType, [int]$m) {
     return $rows
 }
 
-$gridCols       = Get-GridCols $mode
+$gridCols        = Get-GridCols $mode
 $tableHeaderHtml = Get-TableHeader $mode
 $rowsNotStarted  = Get-Rows $notStarted "none"    $mode
 $rowsPartial     = Get-Rows $partial    "partial" $mode
 $rowsComplete    = Get-Rows $complete   "done"    $mode
+
+if ($mode -eq 5) {
+    $rowsNoMethods  = Get-Rows $noMethodsGroup  "no-methods"  5
+    $rowsLegacy     = Get-Rows $legacyOnlyGroup "legacy-only" 5
+    $rowsModern     = Get-Rows $modernGroup     "modern"      5
+}
 
 $safeGroupName  = [System.Web.HttpUtility]::HtmlEncode($groupName)
 $safeTenantName = [System.Web.HttpUtility]::HtmlEncode($tenantName)
@@ -349,18 +454,40 @@ $generatedAt    = Get-Date -Format "dd MMM yyyy 'at' HH:mm"
 
 $headerSubtitle = if ($tenantName) { "$safeTenantName &middot; $safeGroupName" } else { $safeGroupName }
 
-# ── Stat cards ────────────────────────────────────────────────────────────────
+# ── Stat cards / method count banner ─────────────────────────────────────────
+if ($mode -eq 5) {
+    $cntAuth  = ($users | Where-Object { $_.HasAuthenticator }).Count
+    $cntWHfB  = ($users | Where-Object { $_.HasWHfB }).Count
+    $cntFido  = ($users | Where-Object { $_.HasFido2 }).Count
+    $cntOath  = ($users | Where-Object { $_.HasSoftwareOath }).Count
+    $cntSms   = ($users | Where-Object { $_.HasSms }).Count
+    $cntVoice = ($users | Where-Object { $_.HasVoice }).Count
+    $cntEmail = ($users | Where-Object { $_.HasEmail }).Count
+    $cntNone  = $noMethodsGroup.Count
+}
+
 if ($mode -eq 1) {
     $statCards = @"
     <div class="stat total"><div class="stat-label">Total Users</div><div class="stat-number">$totalUsers</div><div class="stat-sub">in target group</div></div>
-    <div class="stat remaining"><div class="stat-label">Not Started</div><div class="stat-number">$notStartedCount</div><div class="stat-sub">still to catch</div></div>
+    <div class="stat remaining"><div class="stat-label">Not Registered</div><div class="stat-number">$notStartedCount</div><div class="stat-sub">not registered</div></div>
     <div class="stat partial"><div class="stat-label">Partial</div><div class="stat-number">$partialCount</div><div class="stat-sub">one method only</div></div>
     <div class="stat complete"><div class="stat-label">Fully Enrolled</div><div class="stat-number">$completeCount</div><div class="stat-sub">authenticator + WHfB</div></div>
+"@
+} elseif ($mode -eq 5) {
+    $statCards = @"
+    <div class="stat complete"><div class="stat-label">Auth App</div><div class="stat-number">$cntAuth</div><div class="stat-sub">users</div></div>
+    <div class="stat complete"><div class="stat-label">WHfB</div><div class="stat-number">$cntWHfB</div><div class="stat-sub">users</div></div>
+    <div class="stat complete"><div class="stat-label">FIDO2</div><div class="stat-number">$cntFido</div><div class="stat-sub">users</div></div>
+    <div class="stat complete"><div class="stat-label">Software OATH</div><div class="stat-number">$cntOath</div><div class="stat-sub">users</div></div>
+    <div class="stat partial"><div class="stat-label">SMS</div><div class="stat-number">$cntSms</div><div class="stat-sub">users</div></div>
+    <div class="stat partial"><div class="stat-label">Voice</div><div class="stat-number">$cntVoice</div><div class="stat-sub">users</div></div>
+    <div class="stat partial"><div class="stat-label">Email OTP</div><div class="stat-number">$cntEmail</div><div class="stat-sub">users</div></div>
+    <div class="stat remaining"><div class="stat-label">No Methods</div><div class="stat-number">$cntNone</div><div class="stat-sub">users</div></div>
 "@
 } else {
     $statCards = @"
     <div class="stat total"><div class="stat-label">Total Users</div><div class="stat-number">$totalUsers</div><div class="stat-sub">in target group</div></div>
-    <div class="stat remaining"><div class="stat-label">Not Registered</div><div class="stat-number">$notStartedCount</div><div class="stat-sub">still to catch</div></div>
+    <div class="stat remaining"><div class="stat-label">Not Registered</div><div class="stat-number">$notStartedCount</div><div class="stat-sub">not registered</div></div>
     <div class="stat complete"><div class="stat-label">Registered</div><div class="stat-number">$completeCount</div><div class="stat-sub">$safeModeLabel</div></div>
     <div class="stat partial"><div class="stat-label">Coverage</div><div class="stat-number">$pctComplete%</div><div class="stat-sub">of group enrolled</div></div>
 "@
@@ -380,9 +507,15 @@ $partialSection = if ($mode -eq 1) { @"
   </div>
 "@ } else { "" }
 
-$progressPartialDiv = if ($mode -eq 1) { '<div class="progress-partial"></div>' } else { "" }
+$progressPartialDiv   = if ($mode -eq 1) { '<div class="progress-partial"></div>' } else { "" }
 $progressPartialLabel = if ($mode -eq 1) { " &middot; <span style=`"color:var(--amber)`">$partialCount partial</span>" } else { "" }
-$completedLabel = if ($mode -eq 1) { "Fully Enrolled" } else { "Registered" }
+$completedLabel       = if ($mode -eq 1) { "Fully Enrolled" } else { "Registered" }
+
+if ($mode -eq 5) {
+    $noMethodsCount  = $noMethodsGroup.Count
+    $legacyOnlyCount = $legacyOnlyGroup.Count
+    $modernCount     = $modernGroup.Count
+}
 
 # ── Error users section (shown only if fetch errors occurred) ─────────────────
 $errorSection = ""
@@ -402,6 +535,97 @@ if ($errorUsers.Count -gt 0) {
     <p style="font-size:0.8rem;color:var(--muted);margin-bottom:0.75rem">Auth method queries failed for these users. They are excluded from all counts. Re-run the script to retry.</p>
     <div class="table">
       $errorRows
+    </div>
+  </div>
+"@
+}
+
+# ── Main sections HTML ────────────────────────────────────────────────────────
+if ($mode -eq 5) {
+    $mainSections = @"
+  <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">$totalUsers users &middot; <span style="color:var(--amber)">$legacyOnlyCount legacy-only</span> &middot; <span style="color:var(--red)">$noMethodsCount with no methods</span></p>
+
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title remaining">No Methods Registered</span>
+      <span class="section-count remaining">$noMethodsCount</span>
+    </div>
+    <div class="table">
+      <div class="table-header">$tableHeaderHtml</div>
+      $rowsNoMethods
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title partial">Legacy Only</span>
+      <span class="section-count partial">$legacyOnlyCount</span>
+    </div>
+    <div class="table">
+      <div class="table-header">$tableHeaderHtml</div>
+      $rowsLegacy
+    </div>
+  </div>
+
+  $errorSection
+
+  <div class="section">
+    <div class="section-header">
+      <button class="collapse-toggle" onclick="toggle()">
+        <span class="section-title complete">Modern Methods</span>
+        <span class="section-count complete">$modernCount</span>
+        <span class="chevron" id="chev">&#9658;</span>
+      </button>
+    </div>
+    <div class="collapse-body" id="completedBody">
+      <div class="table">
+        <div class="table-header">$tableHeaderHtml</div>
+        $rowsModern
+      </div>
+    </div>
+  </div>
+"@
+} else {
+    $mainSections = @"
+  <div class="progress-wrap">
+    <div class="progress-label">
+      <span>Enrolment Progress</span>
+      <span><span style="color:var(--accent)">$completeCount complete</span>$progressPartialLabel &middot; <span style="color:var(--red)">$notStartedCount remaining</span></span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-complete"></div>
+      $progressPartialDiv
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title remaining">Not Registered</span>
+      <span class="section-count remaining">$notStartedCount</span>
+    </div>
+    <div class="table">
+      <div class="table-header">$tableHeaderHtml</div>
+      $rowsNotStarted
+    </div>
+  </div>
+
+  $partialSection
+
+  $errorSection
+
+  <div class="section">
+    <div class="section-header">
+      <button class="collapse-toggle" onclick="toggle()">
+        <span class="section-title complete">$completedLabel</span>
+        <span class="section-count complete">$completeCount</span>
+        <span class="chevron" id="chev">&#9658;</span>
+      </button>
+    </div>
+    <div class="collapse-body" id="completedBody">
+      <div class="table">
+        <div class="table-header">$tableHeaderHtml</div>
+        $rowsComplete
+      </div>
     </div>
   </div>
 "@
@@ -478,6 +702,7 @@ $html = @"
   .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 3px 9px; border-radius: 6px; width: fit-content; }
   .badge.yes { background: var(--accent-dim); color: var(--accent); }
   .badge.no { background: var(--red-dim); color: var(--red); }
+  .badge.warn { background: var(--amber-dim); color: var(--amber); }
   .pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 99px; display: inline-block; width: fit-content; }
   .pill.done { background: var(--accent-dim); color: var(--accent); }
   .pill.partial { background: var(--amber-dim); color: var(--amber); }
@@ -515,47 +740,7 @@ $html = @"
     $statCards
   </div>
 
-  <div class="progress-wrap">
-    <div class="progress-label">
-      <span>Enrolment Progress</span>
-      <span><span style="color:var(--accent)">$completeCount complete</span>$progressPartialLabel &middot; <span style="color:var(--red)">$notStartedCount remaining</span></span>
-    </div>
-    <div class="progress-track">
-      <div class="progress-complete"></div>
-      $progressPartialDiv
-    </div>
-  </div>
-
-  <div class="section">
-    <div class="section-header">
-      <span class="section-title remaining">Still to Catch</span>
-      <span class="section-count remaining">$notStartedCount</span>
-    </div>
-    <div class="table">
-      <div class="table-header">$tableHeaderHtml</div>
-      $rowsNotStarted
-    </div>
-  </div>
-
-  $partialSection
-
-  $errorSection
-
-  <div class="section">
-    <div class="section-header">
-      <button class="collapse-toggle" onclick="toggle()">
-        <span class="section-title complete">$completedLabel</span>
-        <span class="section-count complete">$completeCount</span>
-        <span class="chevron" id="chev">&#9658;</span>
-      </button>
-    </div>
-    <div class="collapse-body" id="completedBody">
-      <div class="table">
-        <div class="table-header">$tableHeaderHtml</div>
-        $rowsComplete
-      </div>
-    </div>
-  </div>
+  $mainSections
 
 </div>
 
