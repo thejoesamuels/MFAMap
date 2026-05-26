@@ -694,7 +694,7 @@ $html = @"
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --navy: #252436; --navy-light: #2f2d47; --navy-lighter: #3a3756;
+    --navy: #1A1A1A; --navy-light: #242424; --navy-lighter: #2E2E2E;
     --accent: $accentColor; --accent-dim: $accentDim;
     --ui-accent: #43C0B9; --ui-accent-dim: rgba(67,192,185,0.12);
     --red: #E66558; --red-dim: rgba(230,101,88,0.12);
