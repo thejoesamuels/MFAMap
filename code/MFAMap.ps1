@@ -696,7 +696,7 @@ $html = @"
   :root {
     --navy: #1A1A1A; --navy-light: #242424; --navy-lighter: #2E2E2E;
     --accent: $accentColor; --accent-dim: $accentDim;
-    --ui-accent: #43C0B9; --ui-accent-dim: rgba(67,192,185,0.12);
+    --ui-accent: #F5CF18; --ui-accent-dim: rgba(245,207,24,0.12);
     --red: #E66558; --red-dim: rgba(230,101,88,0.12);
     --amber: #FF8F52; --amber-dim: rgba(255,143,82,0.12);
     --yellow: #EAD654; --yellow-dim: rgba(234,214,84,0.12);
@@ -707,7 +707,7 @@ $html = @"
   body { background: var(--navy); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
   .header { background: var(--navy-light); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
   .header-left { display: flex; align-items: center; gap: 14px; }
-  .logo { width: 34px; height: 34px; background: var(--ui-accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .logo { background: var(--ui-accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 6px 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: #1A1A1A; letter-spacing: -0.02em; }
   .header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
   .header-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   .header-right { display: flex; align-items: center; gap: 12px; }
@@ -787,7 +787,7 @@ $html = @"
 
 <div class="header">
   <div class="header-left">
-    <div class="logo">&#9889;</div>
+    <div class="logo">MFAMap</div>
     <div>
       <div class="header-title">Authentication Method Map</div>
       <div class="header-subtitle">$headerSubtitle</div>

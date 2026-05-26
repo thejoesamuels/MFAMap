@@ -9,6 +9,7 @@ When you run it, you're prompted to choose what to track:
 - **Mode 2** — Windows Hello for Business only
 - **Mode 3** — Microsoft Authenticator only
 - **Mode 4** — Passkey (FIDO2 or Authenticator device-bound passkey)
+- **Mode 5** — Full method audit (all authentication methods)
 
 ---
 
@@ -57,11 +58,12 @@ PowerShell -ExecutionPolicy Bypass -File .\MFAMap.ps1 -GroupId "your-group-objec
 ```
 
 The script will:
-1. Prompt you to choose a tracking mode (1-4)
+1. Prompt you to choose a tracking mode (1-5)
 2. Open a Microsoft sign-in window — sign in with your admin account
 3. Fetch the tenant name, group name, and membership
-4. Check each member's authentication methods (only the ones relevant to your chosen mode)
-5. Write a timestamped HTML report to the current directory
+4. Show a **save dialog** — choose where to save the report (or cancel to use the auto-named file in the current directory)
+5. Check each member's authentication methods
+6. Write the HTML report to the location you chose
 
 ---
 
@@ -91,7 +93,7 @@ Each run produces a new timestamped file so previous snapshots are preserved. Th
 
 ## Custom output path
 
-Use `-OutputPath` to override the auto-generated filename:
+Use `-OutputPath` to specify a path directly and skip the save dialog:
 
 ```powershell
 .\MFAMap.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\mfa-report.html"
@@ -107,7 +109,7 @@ MFAMap works on PowerShell 7+ on macOS and Linux. Install PowerShell 7 via Homeb
 brew install --cask powershell
 ```
 
-Then launch it with `pwsh` and follow the same steps.
+Then launch it with `pwsh` and follow the same steps. The save dialog uses `osascript` on macOS and falls back to auto-naming on Linux.
 
 ---
 
@@ -117,11 +119,12 @@ Then launch it with `pwsh` and follow the same steps.
 |---|---|---|
 | Execution policy error | Script not signed | Run with `PowerShell -ExecutionPolicy Bypass -File .\MFAMap.ps1 -GroupId "..."` or run `Set-ExecutionPolicy -Scope CurrentUser Unrestricted` |
 | `Could not retrieve group members` | Wrong Group ID or insufficient permissions | Double-check the Object ID in Entra; confirm your account has Authentication Administrator or Global Reader |
-| `No users found in this group` | Module version conflict or group has no direct user members | Reinstall modules cleanly (see below); confirm group has direct user members in Entra |
+| `No users found in this group` | Group has no direct user members | Confirm the group has direct user members (not nested groups) in Entra |
 | `WARNING: Could not retrieve tenant name` | `Organization.Read.All` not consented | Non-fatal — report still generates without the tenant name |
 | Module version conflicts | Multiple versions of Graph modules installed | Run the cleanup commands below |
 | Sign-in window doesn't appear | Running in an embedded terminal | The WAM sign-in window may appear behind other windows — check the taskbar |
-| Mode 4 shows fewer enrolments than expected | Authenticator passkeys not properly tagged | The Graph API returns this info via the Authenticator method's `authenticationMode` field — older Authenticator versions may not surface this correctly |
+| Save dialog doesn't appear | Headless or restricted environment | The script falls back to auto-naming the file in the current directory |
+| Mode 4 shows fewer enrolments than expected | Authenticator passkeys not properly tagged | The Graph API returns this via the Authenticator method's `authenticationMode` field — older Authenticator versions may not surface this correctly |
 
 ### Module cleanup
 
