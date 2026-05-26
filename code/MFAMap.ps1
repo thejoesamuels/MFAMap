@@ -700,7 +700,7 @@ $html = @"
     --red: #E66558; --red-dim: rgba(230,101,88,0.12);
     --amber: #FF8F52; --amber-dim: rgba(255,143,82,0.12);
     --yellow: #EAD654; --yellow-dim: rgba(234,214,84,0.12);
-    --text: #e8e6f0; --text-muted: #8b89a0; --text-dim: #5a5870;
+    --text: #FFFFFF; --text-muted: #9E9E9E; --text-dim: #606060;
     --border: rgba(255,255,255,0.06);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -810,7 +810,7 @@ $html = @"
 </div>
 
 <div class="footer">
-  Generated <span>$generatedAt</span> &middot; vibecoded by JS &#9889;
+  Generated <span>$generatedAt</span> &middot; vibecoded by <span style="color:#F5CF18">JS</span> &#9889;
 </div>
 
 <script>
