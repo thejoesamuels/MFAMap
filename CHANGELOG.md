@@ -2,7 +2,7 @@
 
 ---
 
-## [Unreleased]
+## [2.0.0] — 2026-05-26
 
 ### New features
 

@@ -1,5 +1,10 @@
 # Generated report files
+mfamap_*.html
 code/mfamap_*.html
 
 # Claude Code project files
+.claude/
 code/.claude/
+
+# macOS
+.DS_Store
