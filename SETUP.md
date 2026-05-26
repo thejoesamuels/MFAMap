@@ -137,6 +137,29 @@ Install-Module Microsoft.Graph -Scope CurrentUser -Force
 
 ---
 
+## Authentication on Windows (WAM)
+
+On Windows 10/11, `Connect-MgGraph` uses the **Web Account Manager (WAM)** — a Windows OS-level authentication broker built into the operating system. Instead of opening a browser tab, WAM shows a native Windows sign-in or account picker dialog.
+
+WAM is aware of accounts already signed into Windows, including your Microsoft 365 work account. This means:
+
+- On a machine where you use your admin account day-to-day, sign-in may be silent or just show a quick account picker with no password prompt
+- On a fresh machine, you'll see the full sign-in dialog the first time
+
+**Token caching:** WAM caches tokens in the Windows Credential Manager. Re-running MFAMap shortly after a previous run will typically re-authenticate silently without prompting — the cached token is reused until it expires or the requested scopes change.
+
+**Switching accounts:** `Disconnect-MgGraph` clears the MSAL session cache but does not revoke the underlying WAM token. If you need to sign in as a different account (for example, switching between tenants), pass `-ForceRefresh` to force a fresh interactive login:
+
+```powershell
+Connect-MgGraph -Scopes "..." -ForceRefresh
+```
+
+MFAMap doesn't expose this as a parameter directly — if you need to switch accounts, run `Disconnect-MgGraph` manually in PowerShell first, then run the script.
+
+**Sign-in window appearing behind other windows:** the WAM dialog is a system-level window and doesn't always come to the foreground, particularly when launched from an embedded terminal (e.g. inside VS Code). If the script appears to hang at the connecting step, check the taskbar for a sign-in window waiting for input.
+
+---
+
 ## About the consent prompt
 
 When you sign in, you may see a consent screen from **Microsoft Graph Command Line Tools** listing a large number of permissions. This is the shared app registration that the Graph PowerShell SDK uses — the list reflects its full permission history in your tenant, not what MFAMap specifically requests.
