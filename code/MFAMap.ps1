@@ -337,18 +337,18 @@ Write-Host ""
 
 # ── Mode-specific accent colour ───────────────────────────────────────────────
 $accentColor = switch ($mode) {
-    1 { "#43C0B9" }  # teal
-    2 { "#7b6ff0" }  # purple
-    3 { "#43C0B9" }  # teal
-    4 { "#f0a843" }  # amber
-    5 { "#4B9EE8" }  # blue
+    1 { "#57BD84" }  # green
+    2 { "#57BD84" }  # green
+    3 { "#57BD84" }  # green
+    4 { "#57BD84" }  # green
+    5 { "#659AD2" }  # blue
 }
 $accentDim = switch ($mode) {
-    1 { "rgba(67,192,185,0.15)" }
-    2 { "rgba(123,111,240,0.15)" }
-    3 { "rgba(67,192,185,0.15)" }
-    4 { "rgba(240,168,67,0.15)" }
-    5 { "rgba(75,158,232,0.15)" }
+    1 { "rgba(87,189,132,0.12)" }
+    2 { "rgba(87,189,132,0.12)" }
+    3 { "rgba(87,189,132,0.12)" }
+    4 { "rgba(87,189,132,0.12)" }
+    5 { "rgba(101,154,210,0.12)" }
 }
 
 # ── HTML helpers ──────────────────────────────────────────────────────────────
@@ -501,7 +501,7 @@ if ($mode -eq 1) {
     <div class="stat total"><div class="stat-label">Total Users</div><div class="stat-number">$totalUsers</div><div class="stat-sub">in target group</div></div>
     <div class="stat remaining"><div class="stat-label">Not Registered</div><div class="stat-number">$notStartedCount</div><div class="stat-sub">not registered</div></div>
     <div class="stat complete"><div class="stat-label">Registered</div><div class="stat-number">$completeCount</div><div class="stat-sub">$safeModeLabel</div></div>
-    <div class="stat partial"><div class="stat-label">Coverage</div><div class="stat-number">$pctComplete%</div><div class="stat-sub">of group enrolled</div></div>
+    <div class="stat coverage"><div class="stat-label">Coverage</div><div class="stat-number">$pctComplete%</div><div class="stat-sub">of group enrolled</div></div>
 "@
 }
 
@@ -663,8 +663,9 @@ $html = @"
   :root {
     --navy: #252436; --navy-light: #2f2d47; --navy-lighter: #3a3756;
     --accent: $accentColor; --accent-dim: $accentDim;
-    --red: #e05c6a; --red-dim: rgba(224,92,106,0.12);
-    --amber: #f0a843; --amber-dim: rgba(240,168,67,0.12);
+    --red: #E66558; --red-dim: rgba(230,101,88,0.12);
+    --amber: #FF8F52; --amber-dim: rgba(255,143,82,0.12);
+    --yellow: #EAD654; --yellow-dim: rgba(234,214,84,0.12);
     --text: #e8e6f0; --text-muted: #8b89a0; --text-dim: #5a5870;
     --border: rgba(255,255,255,0.06);
   }
@@ -708,6 +709,10 @@ $html = @"
   .section-count.remaining { background: var(--red-dim); color: var(--red); }
   .section-count.partial { background: var(--amber-dim); color: var(--amber); }
   .section-count.complete { background: var(--accent-dim); color: var(--accent); }
+  .stat.coverage::before { background: var(--yellow); }
+  .stat.coverage .stat-number { color: var(--yellow); }
+  .section-title.coverage { color: var(--yellow); }
+  .section-count.coverage { background: var(--yellow-dim); color: var(--yellow); }
   .table { background: var(--navy-light); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
   .table-header { padding: 9px 18px; border-bottom: 1px solid var(--border); font-size: 10px; font-weight: 500; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.07em; display: grid; }
   .row { display: grid; padding: 12px 18px; border-bottom: 1px solid var(--border); align-items: center; }
