@@ -2,7 +2,7 @@
 
 **Authentication method mapper for Microsoft Entra ID**
 
-MFAMap generates a self-contained HTML dashboard showing authentication method registration across a target Entra group. Run the script, pick a tracking mode, get a file. Open it in any browser, share it with anyone — no server, no login, no dependencies.
+MFAMap generates a self-contained HTML dashboard showing authentication method registration across a target Entra group. Run the script, pick a tracking mode, save the file. Open it in any browser, share it with anyone — no server, no login, no dependencies.
 
 <img src="images/dashboard.png" alt="MFAMap dashboard preview" width="600">
 
@@ -10,16 +10,16 @@ MFAMap generates a self-contained HTML dashboard showing authentication method r
 
 ## ✨ Key features
 
-- 🎛️ **Four tracking modes** — pick what to track at runtime via an interactive menu
+- 🎛️ **Five tracking modes** — pick what to track at runtime via an interactive menu
 - 🗂️ **Single output file** — generates one self-contained HTML file with no dependencies
+- 💾 **Native save dialog** — file save dialog appears automatically on Windows and macOS; falls back to auto-naming if unavailable
 - 🔑 **Uses your existing credentials** — authenticates via `Connect-MgGraph` with your own admin account; no app registration required
 - 🏢 **Tenant and group name in the report** — header shows exactly which tenant and group you ran against
-- 🎨 **Mode-themed branding** — accent colour and badge change based on what you're tracking
+- 🎨 **Semantic data colours** — registered, partial, and not-registered states use consistent colours throughout
 - 📁 **Auto-named output** — HTML file is named with the group name, mode, and timestamp automatically
 - 🎯 **Group-scoped** — targets a specific Entra group, not your entire tenant
-- 🚨 **"Still to catch" first** — users with nothing registered are surfaced at the top
-- ✅ **Completed section collapsed** — registered users are tucked away so they don't distract
-- 📊 **Progress bar** — visual breakdown of complete, partial, and not-started at a glance
+- 🚨 **Not Registered first** — users with nothing registered are surfaced at the top
+- 🔍 **Method filtering** — Mode 5 stat cards act as filters; click any method to isolate users who have it registered
 - 📤 **Fully portable** — the output HTML file can be opened, shared, or emailed with no auth required
 - 🔄 **Re-run to refresh** — run the script again to regenerate with fresh data
 - 🔌 **Auto-disconnect** — the script disconnects from Microsoft Graph automatically on completion
@@ -38,8 +38,9 @@ When you run the script you're prompted to choose what to track:
 | **2** | Windows Hello for Business only | Tracking WHfB rollout independently |
 | **3** | Microsoft Authenticator only | Tracking Authenticator rollout independently |
 | **4** | Passkey | Tracking passkey adoption (FIDO2 keys or Authenticator device-bound passkeys) |
+| **5** | Full method audit | Complete view of all authentication methods across the group |
 
-Modes 2, 3, and 4 are binary — registered or not. Mode 1 includes a **Partially Enrolled** section for users who have one method but not both.
+Modes 2, 3, and 4 are binary — registered or not. Mode 1 includes a **Partially Enrolled** section for users who have one method but not both. Mode 5 shows all seven methods per user and groups them into Modern Methods, Legacy Only, and No Methods.
 
 ---
 
@@ -48,7 +49,7 @@ Modes 2, 3, and 4 are binary — registered or not. Mode 1 includes a **Partiall
 ```
 .\MFAMap.ps1 -GroupId "your-group-id"
         ↓
-Choose tracking mode (1-4)
+Choose tracking mode (1-5)
         ↓
 Connect-MgGraph  (sign in with your admin account each run)
         ↓
@@ -57,10 +58,14 @@ Invoke-MgGraphRequest — direct Graph API calls
 /groups/{id}                                               (group display name)
 /groups/{id}/members                                       (group membership)
 /users/{id}                                                (user display name + UPN)
-/users/{id}/authentication/microsoftAuthenticatorMethods   (mode 1, 3, 4)
-/users/{id}/authentication/softwareOathMethods             (mode 1, 3 — fallback if Authenticator not found)
-/users/{id}/authentication/windowsHelloForBusinessMethods  (mode 1, 2)
-/users/{id}/authentication/fido2Methods                    (mode 4)
+/users/{id}/authentication/microsoftAuthenticatorMethods   (modes 1, 3, 4, 5)
+/users/{id}/authentication/softwareOathMethods             (modes 1, 3, 5 — fallback / TOTP)
+/users/{id}/authentication/windowsHelloForBusinessMethods  (modes 1, 2, 5)
+/users/{id}/authentication/fido2Methods                    (modes 4, 5)
+/users/{id}/authentication/phoneMethods                    (mode 5 — SMS and voice)
+/users/{id}/authentication/emailMethods                    (mode 5 — email OTP)
+        ↓
+Native save dialog (Windows / macOS) or auto-named file
         ↓
 Self-contained HTML file written to disk
 mfamap_GroupName_Mode1-Auth-WHfB_2026-04-23_0941.html
@@ -114,7 +119,7 @@ In [entra.microsoft.com](https://entra.microsoft.com) → **Groups** → find yo
 .\MFAMap.ps1 -GroupId "your-group-object-id"
 ```
 
-When prompted, pick a tracking mode (1-4). Sign in with your Microsoft admin account when prompted. The script generates a timestamped HTML report in the current directory.
+When prompted, pick a tracking mode (1-5). Sign in with your Microsoft admin account when prompted. A save dialog will appear — choose where to save the report, or cancel to use the auto-named file in the current directory.
 
 **4. Open the report**
 
@@ -133,15 +138,15 @@ Double-click the file or open it in any browser.
 | Parameter | Required | Default | Description |
 |---|---|---|---|
 | `-GroupId` | ✅ Yes | — | Object ID of the target Entra group |
-| `-OutputPath` | No | Auto-generated | Override the output file path |
+| `-OutputPath` | No | Auto-generated | Override the output file path and skip the save dialog |
 
 **Examples:**
 
 ```powershell
-# Basic — output file named automatically from group name, mode, and timestamp
+# Basic — save dialog appears with auto-suggested filename
 .\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00"
 
-# Custom output path (overrides auto-naming)
+# Custom output path (skips dialog)
 .\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -OutputPath "C:\Reports\mfa-report.html"
 ```
 
@@ -153,26 +158,28 @@ Double-click the file or open it in any browser.
 
 | Method registered | Counted as |
 |---|---|
-| Microsoft Authenticator app | ✅ Authenticator App |
+| Microsoft Authenticator app | ✅ Authenticator |
+| Software OATH / TOTP token | ✅ Authenticator (TOTP only badge) |
 | Windows Hello for Business | ✅ Windows Hello |
 | One method only | 🟡 Partially Enrolled |
-| Neither | ❌ Not started |
+| Neither | ❌ Not Registered |
 
-A user is **Fully Enrolled** only when both are registered.
+A user is **Fully Enrolled** only when both Authenticator (or TOTP) and WHfB are registered.
 
 ### Mode 2 — Windows Hello for Business only
 
 | Method registered | Counted as |
 |---|---|
 | Windows Hello for Business | ✅ Registered |
-| Anything else only | ❌ Not registered |
+| Anything else only | ❌ Not Registered |
 
 ### Mode 3 — Authenticator only
 
 | Method registered | Counted as |
 |---|---|
-| Microsoft Authenticator app (any mode) | ✅ Registered |
-| Anything else only | ❌ Not registered |
+| Microsoft Authenticator app | ✅ Registered |
+| Software OATH / TOTP token | ✅ Registered (TOTP only badge shown) |
+| Anything else only | ❌ Not Registered |
 
 ### Mode 4 — Passkey
 
@@ -180,7 +187,19 @@ A user is **Fully Enrolled** only when both are registered.
 |---|---|
 | FIDO2 security key | ✅ Registered |
 | Microsoft Authenticator device-bound passkey | ✅ Registered |
-| Anything else only | ❌ Not registered |
+| Anything else only | ❌ Not Registered |
+
+### Mode 5 — Full Method Audit
+
+All seven authentication methods are checked per user. Users are grouped into:
+
+| Section | Criteria |
+|---|---|
+| **No Methods** | No registered authentication methods at all |
+| **Legacy Only** | Only SMS, Voice, and/or Email OTP — no modern methods |
+| **Modern Methods** | At least one of: Authenticator, WHfB, FIDO2, Software OATH |
+
+The method count banner at the top shows how many users have each method. Clicking a method card filters the table to show only users with that method registered.
 
 ---
 
@@ -188,7 +207,7 @@ A user is **Fully Enrolled** only when both are registered.
 
 **No data leaves your machine.** The script queries Microsoft Graph directly from your PowerShell session and writes output to a local HTML file. No telemetry, no logging endpoints.
 
-**Note on Google Fonts.** The generated HTML report loads fonts from `fonts.googleapis.com` at open time. No user data is sent — it's a standard font request — but it does mean the report phones out to Google's CDN when opened in a browser. If you're working in a restricted or air-gapped environment the fonts will silently fall back to system fonts, but be aware the request is made.
+**Note on Google Fonts.** The generated HTML report loads fonts from `fonts.googleapis.com` at open time. No user data is sent — it's a standard font request — but it does mean the report makes a request to Google's CDN when opened in a browser. If you're in a restricted or air-gapped environment the fonts will silently fall back to system fonts.
 
 **Delegated permissions only.** The script authenticates as you — it can only see what your account can see. No application permissions, no background processes, no scheduled jobs.
 
@@ -204,7 +223,7 @@ A user is **Fully Enrolled** only when both are registered.
 
 ## 🔄 Refreshing during a session
 
-Re-run the script to generate a fresh report. Each run produces a new timestamped file so previous snapshots are preserved. The script connects and disconnects fresh on every run — you may be prompted to sign in again, or silently re-authenticated via cached token depending on your session state.
+Re-run the script to generate a fresh report. Each run produces a new timestamped file so previous snapshots are preserved. The script connects and disconnects fresh on every run.
 
 You can switch modes between runs — just choose a different number when prompted.
 
