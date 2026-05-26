@@ -29,8 +29,8 @@
 
 ### Developer tooling
 
-- `setup/Create-MFAMapTestUsers.ps1`: script to provision the ten test users and group defined in `TESTING.md` against a dev tenant. Includes policy checks for SMS, Voice, Email OTP, and Software OATH — skips methods disabled in the tenant's Authentication Methods Policy and lists them as manual steps.
-- `setup/README.md`: documents the setup script, its prerequisites, configuration variables, and re-run / cleanup behaviour.
+- `testing/Create-MFAMapTestUsers.ps1`: script to provision the ten test users and group defined in `TESTING.md` against a dev tenant. Includes policy checks for SMS, Voice, Email OTP, and Software OATH — skips methods disabled in the tenant's Authentication Methods Policy and lists them as manual steps.
+- `testing/README.md`: documents the setup script, its prerequisites, configuration variables, and re-run / cleanup behaviour.
 - `TESTING.md`: comprehensive test plan covering all five modes, edge cases, and a pre-merge checklist.
 
 ---
