@@ -696,6 +696,7 @@ $html = @"
   :root {
     --navy: #252436; --navy-light: #2f2d47; --navy-lighter: #3a3756;
     --accent: $accentColor; --accent-dim: $accentDim;
+    --ui-accent: #43C0B9; --ui-accent-dim: rgba(67,192,185,0.12);
     --red: #E66558; --red-dim: rgba(230,101,88,0.12);
     --amber: #FF8F52; --amber-dim: rgba(255,143,82,0.12);
     --yellow: #EAD654; --yellow-dim: rgba(234,214,84,0.12);
@@ -706,11 +707,11 @@ $html = @"
   body { background: var(--navy); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
   .header { background: var(--navy-light); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
   .header-left { display: flex; align-items: center; gap: 14px; }
-  .logo { width: 34px; height: 34px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .logo { width: 34px; height: 34px; background: var(--ui-accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
   .header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
   .header-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   .header-right { display: flex; align-items: center; gap: 12px; }
-  .mode-badge { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 99px; background: var(--accent-dim); color: var(--accent); }
+  .mode-badge { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 99px; background: var(--ui-accent-dim); color: var(--ui-accent); }
   .generated { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
   .main { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
   .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 20px; }
@@ -769,7 +770,7 @@ $html = @"
   .collapse-body.open { display: block; }
   .empty { padding: 22px; text-align: center; font-size: 13px; color: var(--text-dim); }
   .footer { text-align: center; padding: 18px; font-size: 11px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
-  .footer span { color: var(--accent); }
+  .footer span { color: var(--ui-accent); }
   .table-header, .row { grid-template-columns: $gridCols; }
   .stat[data-filter] { cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
   .stat[data-filter]:hover { border-color: rgba(255,255,255,0.15); }
