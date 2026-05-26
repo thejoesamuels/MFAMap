@@ -591,10 +591,10 @@ if ($mode -eq 5) {
       <button class="collapse-toggle" onclick="toggle()">
         <span class="section-title complete">Modern Methods</span>
         <span class="section-count complete">$modernCount</span>
-        <span class="chevron" id="chev">&#9658;</span>
+        <span class="chevron open" id="chev">&#9658;</span>
       </button>
     </div>
-    <div class="collapse-body" id="completedBody">
+    <div class="collapse-body open" id="completedBody">
       <div class="table">
         <div class="table-header">$tableHeaderHtml</div>
         $rowsModern
@@ -635,10 +635,10 @@ if ($mode -eq 5) {
       <button class="collapse-toggle" onclick="toggle()">
         <span class="section-title complete">$completedLabel</span>
         <span class="section-count complete">$completeCount</span>
-        <span class="chevron" id="chev">&#9658;</span>
+        <span class="chevron open" id="chev">&#9658;</span>
       </button>
     </div>
-    <div class="collapse-body" id="completedBody">
+    <div class="collapse-body open" id="completedBody">
       <div class="table">
         <div class="table-header">$tableHeaderHtml</div>
         $rowsComplete
