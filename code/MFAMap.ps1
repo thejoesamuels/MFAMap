@@ -102,10 +102,43 @@ try {
 }
 
 # ── Output filename ───────────────────────────────────────────────────────────
+$safeName      = $groupName -replace '[^\w\s-]', '' -replace '\s+', '-'
+$timestamp     = Get-Date -Format "yyyy-MM-dd_HHmm"
+$suggestedName = "mfamap_${safeName}_${modeShort}_${timestamp}.html"
+
 if ($OutputPath -eq "") {
-    $safeName  = $groupName -replace '[^\w\s-]', '' -replace '\s+', '-'
-    $timestamp = Get-Date -Format "yyyy-MM-dd_HHmm"
-    $OutputPath = ".\mfamap_${safeName}_${modeShort}_${timestamp}.html"
+    $dialogUsed = $false
+
+    if ($IsWindows) {
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            $dlg = New-Object System.Windows.Forms.SaveFileDialog
+            $dlg.Title            = "Save MFAMap Report"
+            $dlg.Filter           = "HTML file (*.html)|*.html"
+            $dlg.FileName         = $suggestedName
+            $dlg.InitialDirectory = (Get-Location).Path
+            if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                $OutputPath = $dlg.FileName
+                $dialogUsed = $true
+            } else {
+                Write-Host "  Save cancelled. Exiting." -ForegroundColor Yellow
+                exit 0
+            }
+        } catch { }
+    } elseif ($IsMacOS) {
+        try {
+            $osResult = osascript -e "POSIX path of (choose file name with prompt `"Save MFAMap Report`" default name `"$suggestedName`")" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $osResult) {
+                $OutputPath = $osResult.Trim()
+                if (-not $OutputPath.EndsWith(".html")) { $OutputPath += ".html" }
+                $dialogUsed = $true
+            }
+        } catch { }
+    }
+
+    if (-not $dialogUsed) {
+        $OutputPath = ".\$suggestedName"
+    }
 }
 Write-Host ""
 
