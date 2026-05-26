@@ -1,4 +1,4 @@
-﻿# ============================================================================
+﻿30505f59-bee7-4efb-b07b-0db8ce66cebd# ============================================================================
 # MFAMap.ps1
 # Authentication method mapper for Microsoft Entra ID
 #
@@ -387,7 +387,7 @@ function Get-TableHeader([int]$m) {
         2 { return "<div>User</div><div>Windows Hello</div><div>Status</div>" }
         3 { return "<div>User</div><div>Authenticator App</div><div>Status</div>" }
         4 { return "<div>User</div><div>Passkey</div><div>Status</div>" }
-        5 { return "<div>User</div><div>Auth App</div><div>WHfB</div><div>FIDO2</div><div>Soft. OATH</div><div>SMS</div><div>Voice</div><div>Email OTP</div><div>Status</div>" }
+        5 { return "<div>User</div><div>Microsoft Authenticator</div><div>WHfB</div><div>FIDO2</div><div>Soft. OATH</div><div>SMS</div><div>Voice</div><div>Email OTP</div><div>Status</div>" }
     }
 }
 
@@ -424,8 +424,20 @@ function Get-Rows($userList, [string]$statusType, [int]$m) {
         }
         $safeName  = [System.Web.HttpUtility]::HtmlEncode($u.Name)
         $safeEmail = [System.Web.HttpUtility]::HtmlEncode($u.Email)
+        $dataAttrs = ""
+        if ($m -eq 5) {
+            $da = if ($u.HasAuthenticator) { 1 } else { 0 }
+            $dw = if ($u.HasWHfB)          { 1 } else { 0 }
+            $df = if ($u.HasFido2)         { 1 } else { 0 }
+            $do = if ($u.HasSoftwareOath)  { 1 } else { 0 }
+            $ds = if ($u.HasSms)           { 1 } else { 0 }
+            $dv = if ($u.HasVoice)         { 1 } else { 0 }
+            $de = if ($u.HasEmail)         { 1 } else { 0 }
+            $dn = if ($u.NoMethods)        { 1 } else { 0 }
+            $dataAttrs = " data-auth=`"$da`" data-whfb=`"$dw`" data-fido2=`"$df`" data-oath=`"$do`" data-sms=`"$ds`" data-voice=`"$dv`" data-email=`"$de`" data-none=`"$dn`""
+        }
         $rows += @"
-        <div class="row">
+        <div class="row"$dataAttrs>
           <div class="cell"><span class="name">$safeName</span><span class="email">$safeEmail</span></div>
           $methodCells
           <div>$pill</div>
@@ -475,14 +487,14 @@ if ($mode -eq 1) {
 "@
 } elseif ($mode -eq 5) {
     $statCards = @"
-    <div class="stat complete"><div class="stat-label">Auth App</div><div class="stat-number">$cntAuth</div><div class="stat-sub">users</div></div>
-    <div class="stat complete"><div class="stat-label">WHfB</div><div class="stat-number">$cntWHfB</div><div class="stat-sub">users</div></div>
-    <div class="stat complete"><div class="stat-label">FIDO2</div><div class="stat-number">$cntFido</div><div class="stat-sub">users</div></div>
-    <div class="stat complete"><div class="stat-label">Software OATH</div><div class="stat-number">$cntOath</div><div class="stat-sub">users</div></div>
-    <div class="stat partial"><div class="stat-label">SMS</div><div class="stat-number">$cntSms</div><div class="stat-sub">users</div></div>
-    <div class="stat partial"><div class="stat-label">Voice</div><div class="stat-number">$cntVoice</div><div class="stat-sub">users</div></div>
-    <div class="stat partial"><div class="stat-label">Email OTP</div><div class="stat-number">$cntEmail</div><div class="stat-sub">users</div></div>
-    <div class="stat remaining"><div class="stat-label">No Methods</div><div class="stat-number">$cntNone</div><div class="stat-sub">users</div></div>
+    <div class="stat complete" data-filter="auth" onclick="filterBy('auth')" title="Filter by Microsoft Authenticator"><div class="stat-label">Microsoft Authenticator</div><div class="stat-number">$cntAuth</div><div class="stat-sub">users</div></div>
+    <div class="stat complete" data-filter="whfb" onclick="filterBy('whfb')" title="Filter by WHfB"><div class="stat-label">WHfB</div><div class="stat-number">$cntWHfB</div><div class="stat-sub">users</div></div>
+    <div class="stat complete" data-filter="fido2" onclick="filterBy('fido2')" title="Filter by FIDO2"><div class="stat-label">FIDO2</div><div class="stat-number">$cntFido</div><div class="stat-sub">users</div></div>
+    <div class="stat complete" data-filter="oath" onclick="filterBy('oath')" title="Filter by Software OATH"><div class="stat-label">Software OATH</div><div class="stat-number">$cntOath</div><div class="stat-sub">users</div></div>
+    <div class="stat partial" data-filter="sms" onclick="filterBy('sms')" title="Filter by SMS"><div class="stat-label">SMS</div><div class="stat-number">$cntSms</div><div class="stat-sub">users</div></div>
+    <div class="stat partial" data-filter="voice" onclick="filterBy('voice')" title="Filter by Voice"><div class="stat-label">Voice</div><div class="stat-number">$cntVoice</div><div class="stat-sub">users</div></div>
+    <div class="stat partial" data-filter="email" onclick="filterBy('email')" title="Filter by Email OTP"><div class="stat-label">Email OTP</div><div class="stat-number">$cntEmail</div><div class="stat-sub">users</div></div>
+    <div class="stat remaining" data-filter="none" onclick="filterBy('none')" title="Filter: No Methods"><div class="stat-label">No Methods</div><div class="stat-number">$cntNone</div><div class="stat-sub">users</div></div>
 "@
 } else {
     $statCards = @"
@@ -543,7 +555,12 @@ if ($errorUsers.Count -gt 0) {
 # ── Main sections HTML ────────────────────────────────────────────────────────
 if ($mode -eq 5) {
     $mainSections = @"
-  <p style="font-size:12px;color:var(--text-muted);margin-bottom:20px;">$totalUsers users &middot; <span style="color:var(--amber)">$legacyOnlyCount legacy-only</span> &middot; <span style="color:var(--red)">$noMethodsCount with no methods</span></p>
+  <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">$totalUsers users &middot; <span style="color:var(--amber)">$legacyOnlyCount legacy-only</span> &middot; <span style="color:var(--red)">$noMethodsCount with no methods</span></p>
+
+  <div id="filterBar" class="filter-bar" style="display:none">
+    Filtering by <strong id="filterLabel"></strong>
+    <button onclick="filterBy(activeFilter)">Clear</button>
+  </div>
 
   <div class="section">
     <div class="section-header">
@@ -716,6 +733,15 @@ $html = @"
   .footer { text-align: center; padding: 18px; font-size: 11px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
   .footer span { color: var(--accent); }
   .table-header, .row { grid-template-columns: $gridCols; }
+  .stat[data-filter] { cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+  .stat[data-filter]:hover { border-color: rgba(255,255,255,0.15); }
+  .stat[data-filter].active.complete  { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .stat[data-filter].active.partial   { border-color: var(--amber);  box-shadow: 0 0 0 1px var(--amber); }
+  .stat[data-filter].active.remaining { border-color: var(--red);    box-shadow: 0 0 0 1px var(--red); }
+  .filter-bar { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+  .filter-bar strong { color: var(--text); }
+  .filter-bar button { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-family: inherit; }
+  .filter-bar button:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
 </style>
 </head>
 <body>
@@ -752,6 +778,49 @@ $html = @"
   function toggle() {
     document.getElementById('completedBody').classList.toggle('open');
     document.getElementById('chev').classList.toggle('open');
+  }
+
+  let activeFilter = null;
+  const filterLabels = {
+    auth: 'Microsoft Authenticator', whfb: 'WHfB', fido2: 'FIDO2', oath: 'Software OATH',
+    sms: 'SMS', voice: 'Voice', email: 'Email OTP', none: 'No Methods'
+  };
+
+  function filterBy(method) {
+    activeFilter = (activeFilter === method) ? null : method;
+    applyFilter();
+  }
+
+  function applyFilter() {
+    document.querySelectorAll('.row[data-auth]').forEach(row => {
+      row.style.display = (!activeFilter || row.getAttribute('data-' + activeFilter) === '1') ? '' : 'none';
+    });
+
+    if (activeFilter) {
+      const body = document.getElementById('completedBody');
+      const chev = document.getElementById('chev');
+      if (body) { body.classList.add('open'); chev.classList.add('open'); }
+    }
+
+    document.querySelectorAll('.stat[data-filter]').forEach(card => {
+      card.classList.toggle('active', card.getAttribute('data-filter') === activeFilter);
+    });
+
+    document.querySelectorAll('.section').forEach(section => {
+      const all = section.querySelectorAll('.row[data-auth]');
+      const countEl = section.querySelector('.section-count');
+      if (!countEl || all.length === 0) return;
+      if (!countEl.dataset.original) countEl.dataset.original = countEl.textContent;
+      countEl.textContent = activeFilter
+        ? Array.from(all).filter(r => r.style.display !== 'none').length + ' / ' + countEl.dataset.original
+        : countEl.dataset.original;
+    });
+
+    const bar = document.getElementById('filterBar');
+    if (bar) {
+      bar.style.display = activeFilter ? 'flex' : 'none';
+      if (activeFilter) document.getElementById('filterLabel').textContent = filterLabels[activeFilter];
+    }
   }
 </script>
 </body>
