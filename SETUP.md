@@ -58,7 +58,7 @@ PowerShell -ExecutionPolicy Bypass -File .\MFAMap.ps1 -GroupId "your-group-objec
 ```
 
 The script will:
-1. Prompt you to choose a tracking mode (1-5)
+1. Prompt you to choose a tracking mode (1-5) — or skip this by passing `-Mode 1` through `-Mode 5`
 2. Open a Microsoft sign-in window — sign in with your admin account
 3. Fetch the tenant name, group name, and membership
 4. Show a **save dialog** — choose where to save the report (or cancel to use the auto-named file in the current directory)
@@ -91,13 +91,50 @@ Each run produces a new timestamped file so previous snapshots are preserved. Th
 
 ---
 
-## Custom output path
+## Additional parameters
+
+**Skip the mode prompt**
+
+Pass `-Mode` with a number to go straight to a specific mode without the interactive menu:
+
+```powershell
+.\MFAMap.ps1 -GroupId "your-group-object-id" -Mode 3
+```
+
+**Custom output path**
 
 Use `-OutputPath` to specify a path directly and skip the save dialog:
 
 ```powershell
 .\MFAMap.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\mfa-report.html"
 ```
+
+**Branded reports**
+
+Pass `-Branded` to produce a REDACTED branded version of the report — the REDACTED wordmark replaces the MFAMap logo, the colour scheme switches to Beacon Navy and Beacon Teal, and the footer reflects the REDACTED identity:
+
+```powershell
+.\MFAMap.ps1 -GroupId "your-group-object-id" -Branded
+```
+
+**Demo mode**
+
+Run without connecting to Microsoft Graph at all. `-Demo` uses a built-in set of synthetic users to generate a fully populated report — useful for testing, previewing the layout, or showing the tool without needing a live tenant:
+
+```powershell
+# Interactive mode selection
+.\MFAMap.ps1 -Demo
+
+# Skip directly to a specific mode
+.\MFAMap.ps1 -Demo -Mode 1
+
+# Preview the branded report
+.\MFAMap.ps1 -Demo -Mode 5 -Branded
+```
+
+**Saving as PDF**
+
+Every generated report includes a **Save as PDF** button in the header. Click it to open the browser print dialog — the dark theme is preserved in the output. In Chrome and Edge, make sure **Background graphics** is ticked in the print dialog if backgrounds appear washed out.
 
 ---
 
