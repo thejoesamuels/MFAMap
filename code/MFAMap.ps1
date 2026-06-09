@@ -18,15 +18,24 @@
 # ============================================================================
 
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$GroupId,
+    [Parameter(Mandatory = $false)]
+    [string]$GroupId = "",
 
     [Parameter(Mandatory = $false)]
     [string]$OutputPath = "",
 
     [Parameter(Mandatory = $false)]
-    [switch]$Branded
+    [switch]$Demo,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1,5)]
+    [int]$Mode = 0
 )
+
+if (-not $Demo -and [string]::IsNullOrEmpty($GroupId)) {
+    Write-Host "  ERROR: -GroupId is required unless running with -Demo." -ForegroundColor Red
+    exit 1
+}
 
 Add-Type -AssemblyName System.Web
 
@@ -46,8 +55,12 @@ Write-Host "  [4]  Passkey (FIDO2 or Authenticator device-bound passkey)" -Foreg
 Write-Host "  [5]  Full method audit (all authentication methods)" -ForegroundColor Gray
 Write-Host ""
 
-do { $modeInput = Read-Host "  Enter choice (1-5)" } while ($modeInput -notin @('1','2','3','4','5'))
-$mode = [int]$modeInput
+if ($Mode -ge 1 -and $Mode -le 5) {
+    $mode = $Mode
+} else {
+    do { $modeInput = Read-Host "  Enter choice (1-5)" } while ($modeInput -notin @('1','2','3','4','5'))
+    $mode = [int]$modeInput
+}
 
 $modeLabel = switch ($mode) {
     1 { "Authenticator + WHfB" }
@@ -67,6 +80,8 @@ $modeShort = switch ($mode) {
 Write-Host ""
 Write-Host "  Mode: $modeLabel" -ForegroundColor Cyan
 Write-Host ""
+
+if (-not $Demo) {
 
 # ── Connect ───────────────────────────────────────────────────────────────────
 Write-Host "  Connecting to Microsoft Graph..." -ForegroundColor DarkGray
@@ -102,6 +117,13 @@ try {
 } catch {
     Write-Host "  WARNING: Could not retrieve group name." -ForegroundColor Yellow
     $groupName = $GroupId
+}
+
+} else {
+    $tenantName = "Demo Tenant"
+    $groupName  = "Demo Group"
+    Write-Host "  Demo mode — no credentials required." -ForegroundColor Cyan
+    Write-Host ""
 }
 
 # ── Output filename ───────────────────────────────────────────────────────────
@@ -144,6 +166,8 @@ if ($OutputPath -eq "") {
     }
 }
 Write-Host ""
+
+if (-not $Demo) {
 
 # ── Group members ─────────────────────────────────────────────────────────────
 Write-Host "  Fetching group members..." -ForegroundColor DarkGray
@@ -315,6 +339,45 @@ if ($errorUsers.Count -gt 0) {
     Write-Host ""
     Write-Host "  WARNING: Could not retrieve auth methods for $($errorUsers.Count) user(s) — excluded from report:" -ForegroundColor Yellow
     $errorUsers | ForEach-Object { Write-Host "    - $($_.Name) ($($_.Email))" -ForegroundColor Yellow }
+}
+
+} else {
+
+# ── Demo users ────────────────────────────────────────────────────────────────
+$users = @(
+    # Complete — Auth + WHfB
+    [PSCustomObject]@{ Name="Alice Johnson";  Email="alice.johnson@demo.internal";  HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Ben Carter";     Email="ben.carter@demo.internal";     HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Carol Davies";   Email="carol.davies@demo.internal";   HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="David Evans";    Email="david.evans@demo.internal";    HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$true;  IsTotpOnly=$false; HasFido2=$true;  HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Emma Foster";    Email="emma.foster@demo.internal";    HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$true;  IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Sophie Adams";   Email="sophie.adams@demo.internal";   HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Tom Wilson";     Email="tom.wilson@demo.internal";     HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    # Partial — Auth only
+    [PSCustomObject]@{ Name="Frank Green";    Email="frank.green@demo.internal";    HasAuthenticator=$true;  HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Grace Hill";     Email="grace.hill@demo.internal";     HasAuthenticator=$true;  HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$true;  HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    # Partial — WHfB only
+    [PSCustomObject]@{ Name="Harry Irving";   Email="harry.irving@demo.internal";   HasAuthenticator=$false; HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    # TOTP only (Mode 3 special badge)
+    [PSCustomObject]@{ Name="Isabel Jones";   Email="isabel.jones@demo.internal";   HasAuthenticator=$true;  HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$true;  HasFido2=$false; HasSoftwareOath=$true;  HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    # Passkey registered (Mode 4)
+    [PSCustomObject]@{ Name="Jack King";      Email="jack.king@demo.internal";      HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$true;  IsTotpOnly=$false; HasFido2=$true;  HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Karen Lee";      Email="karen.lee@demo.internal";      HasAuthenticator=$true;  HasWHfB=$false; HasPasskey=$true;  IsTotpOnly=$false; HasFido2=$true;  HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    # Legacy only (Mode 5)
+    [PSCustomObject]@{ Name="Liam Moore";     Email="liam.moore@demo.internal";     HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$true;  HasVoice=$false; HasEmail=$false; IsLegacyOnly=$true;  NoMethods=$false },
+    [PSCustomObject]@{ Name="Maya North";     Email="maya.north@demo.internal";     HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$true;  HasEmail=$false; IsLegacyOnly=$true;  NoMethods=$false },
+    [PSCustomObject]@{ Name="Noah Oliver";    Email="noah.oliver@demo.internal";    HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$true;  HasVoice=$false; HasEmail=$true;  IsLegacyOnly=$true;  NoMethods=$false },
+    # No methods registered
+    [PSCustomObject]@{ Name="Olivia Price";   Email="olivia.price@demo.internal";   HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  },
+    [PSCustomObject]@{ Name="Patrick Quinn";  Email="patrick.quinn@demo.internal";  HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  },
+    [PSCustomObject]@{ Name="Rachel Smith";   Email="rachel.smith@demo.internal";   HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  },
+    [PSCustomObject]@{ Name="Sam Taylor";     Email="sam.taylor@demo.internal";     HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  }
+)
+$errorUsers     = @()
+$skippedMembers = @()
+Write-Host "  Loaded $($users.Count) demo users." -ForegroundColor Green
+Write-Host ""
+
 }
 
 # ── Categorise ────────────────────────────────────────────────────────────────
@@ -912,12 +975,14 @@ try {
 Write-Host "  Report saved to: $OutputPath" -ForegroundColor Cyan
 Write-Host ""
 
-try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
+if (-not $Demo) {
+    try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
 
-if (Get-MgContext) {
-    Write-Host "  WARNING: Could not disconnect from Microsoft Graph. Run Disconnect-MgGraph manually." -ForegroundColor Yellow
-} else {
-    Write-Host "  Disconnected from Microsoft Graph." -ForegroundColor DarkGray
+    if (Get-MgContext) {
+        Write-Host "  WARNING: Could not disconnect from Microsoft Graph. Run Disconnect-MgGraph manually." -ForegroundColor Yellow
+    } else {
+        Write-Host "  Disconnected from Microsoft Graph." -ForegroundColor DarkGray
+    }
 }
 
 Write-Host "  Done." -ForegroundColor Green
