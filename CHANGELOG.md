@@ -2,6 +2,20 @@
 
 ---
 
+## [2.1.0] — 2026-06-09
+
+### New features
+
+**Branded reports** — a new `-Branded` switch produces a REDACTED branded version of the report. The full REDACTED wordmark replaces the MFAMap logo in the header, the colour scheme switches to Beacon Navy and Beacon Teal, and the footer carries the REDACTED identity. Everything else — data, layout, modes, filtering — is identical to the standard report.
+
+**PDF export** — every report now includes a "Save as PDF" button in the header. Clicking it opens the browser print dialog pre-configured for PDF output. The dark theme is preserved exactly as it appears on screen. All collapsed sections expand automatically before the dialog opens, and any active filters are cleared so the full dataset is captured.
+
+**Demo mode** — a new `-Demo` switch runs the script without connecting to Microsoft Graph, using a set of 20 synthetic users instead. Covers every display path across all five modes: complete, partial, TOTP-only, passkey, legacy-only, and no methods. Useful for previewing layouts, testing, or showing the tool to someone without needing a live tenant.
+
+**`-Mode` parameter** — pass `-Mode 1` through `-Mode 5` to skip the interactive mode prompt entirely. Works in both normal and demo mode, useful for scripted or unattended runs.
+
+---
+
 ## [2.0.0] — 2026-05-26
 
 ### New features
