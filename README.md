@@ -13,6 +13,9 @@ MFAMap generates a self-contained HTML dashboard showing authentication method r
 - 🎛️ **Five tracking modes** — pick what to track at runtime via an interactive menu
 - 🗂️ **Single output file** — generates one self-contained HTML file with no dependencies
 - 💾 **Native save dialog** — file save dialog appears automatically on Windows and macOS; falls back to auto-naming if unavailable
+- 📄 **PDF export** — every report includes a Save as PDF button; dark theme is preserved exactly as-is in the output
+- 🏷️ **Branded reports** — `-Branded` flag produces a fully branded version of the report for client-facing use
+- 🧪 **Demo mode** — `-Demo` runs without connecting to Microsoft Graph, using synthetic data to preview any mode or layout
 - 🔑 **Uses your existing credentials** — authenticates via `Connect-MgGraph` with your own admin account; no app registration required
 - 🏢 **Tenant and group name in the report** — header shows exactly which tenant and group you ran against
 - 🎨 **Semantic data colours** — registered, partial, and not-registered states use consistent colours throughout
@@ -137,8 +140,11 @@ Double-click the file or open it in any browser.
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
-| `-GroupId` | ✅ Yes | — | Object ID of the target Entra group |
+| `-GroupId` | Required unless using `-Demo` | — | Object ID of the target Entra group |
 | `-OutputPath` | No | Auto-generated | Override the output file path and skip the save dialog |
+| `-Mode` | No | Interactive prompt | Skip the mode prompt — pass `1` through `5` |
+| `-Branded` | No | Off | Produce a REDACTED branded report |
+| `-Demo` | No | Off | Run without a Graph connection using synthetic data |
 
 **Examples:**
 
@@ -148,6 +154,16 @@ Double-click the file or open it in any browser.
 
 # Custom output path (skips dialog)
 .\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -OutputPath "C:\Reports\mfa-report.html"
+
+# Skip the mode prompt
+.\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -Mode 3
+
+# REDACTED branded report
+.\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -Branded
+
+# Demo — preview any mode without credentials
+.\MFAMap.ps1 -Demo -Mode 1
+.\MFAMap.ps1 -Demo -Mode 5 -Branded
 ```
 
 ---

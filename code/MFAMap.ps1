@@ -18,12 +18,24 @@
 # ============================================================================
 
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$GroupId,
+    [Parameter(Mandatory = $false)]
+    [string]$GroupId = "",
 
     [Parameter(Mandatory = $false)]
-    [string]$OutputPath = ""
+    [string]$OutputPath = "",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$Demo,
+
+    [Parameter(Mandatory = $false)]
+    [ValidateRange(1,5)]
+    [int]$Mode = 0
 )
+
+if (-not $Demo -and [string]::IsNullOrEmpty($GroupId)) {
+    Write-Host "  ERROR: -GroupId is required unless running with -Demo." -ForegroundColor Red
+    exit 1
+}
 
 Add-Type -AssemblyName System.Web
 
@@ -43,8 +55,12 @@ Write-Host "  [4]  Passkey (FIDO2 or Authenticator device-bound passkey)" -Foreg
 Write-Host "  [5]  Full method audit (all authentication methods)" -ForegroundColor Gray
 Write-Host ""
 
-do { $modeInput = Read-Host "  Enter choice (1-5)" } while ($modeInput -notin @('1','2','3','4','5'))
-$mode = [int]$modeInput
+if ($Mode -ge 1 -and $Mode -le 5) {
+    $mode = $Mode
+} else {
+    do { $modeInput = Read-Host "  Enter choice (1-5)" } while ($modeInput -notin @('1','2','3','4','5'))
+    $mode = [int]$modeInput
+}
 
 $modeLabel = switch ($mode) {
     1 { "Authenticator + WHfB" }
@@ -64,6 +80,8 @@ $modeShort = switch ($mode) {
 Write-Host ""
 Write-Host "  Mode: $modeLabel" -ForegroundColor Cyan
 Write-Host ""
+
+if (-not $Demo) {
 
 # ── Connect ───────────────────────────────────────────────────────────────────
 Write-Host "  Connecting to Microsoft Graph..." -ForegroundColor DarkGray
@@ -99,6 +117,13 @@ try {
 } catch {
     Write-Host "  WARNING: Could not retrieve group name." -ForegroundColor Yellow
     $groupName = $GroupId
+}
+
+} else {
+    $tenantName = "Demo Tenant"
+    $groupName  = "Demo Group"
+    Write-Host "  Demo mode — no credentials required." -ForegroundColor Cyan
+    Write-Host ""
 }
 
 # ── Output filename ───────────────────────────────────────────────────────────
@@ -141,6 +166,8 @@ if ($OutputPath -eq "") {
     }
 }
 Write-Host ""
+
+if (-not $Demo) {
 
 # ── Group members ─────────────────────────────────────────────────────────────
 Write-Host "  Fetching group members..." -ForegroundColor DarkGray
@@ -312,6 +339,45 @@ if ($errorUsers.Count -gt 0) {
     Write-Host ""
     Write-Host "  WARNING: Could not retrieve auth methods for $($errorUsers.Count) user(s) — excluded from report:" -ForegroundColor Yellow
     $errorUsers | ForEach-Object { Write-Host "    - $($_.Name) ($($_.Email))" -ForegroundColor Yellow }
+}
+
+} else {
+
+# ── Demo users ────────────────────────────────────────────────────────────────
+$users = @(
+    # Complete — Auth + WHfB
+    [PSCustomObject]@{ Name="Alice Johnson";  Email="alice.johnson@demo.internal";  HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Ben Carter";     Email="ben.carter@demo.internal";     HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Carol Davies";   Email="carol.davies@demo.internal";   HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="David Evans";    Email="david.evans@demo.internal";    HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$true;  IsTotpOnly=$false; HasFido2=$true;  HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Emma Foster";    Email="emma.foster@demo.internal";    HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$true;  IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Sophie Adams";   Email="sophie.adams@demo.internal";   HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Tom Wilson";     Email="tom.wilson@demo.internal";     HasAuthenticator=$true;  HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    # Partial — Auth only
+    [PSCustomObject]@{ Name="Frank Green";    Email="frank.green@demo.internal";    HasAuthenticator=$true;  HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Grace Hill";     Email="grace.hill@demo.internal";     HasAuthenticator=$true;  HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$true;  HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    # Partial — WHfB only
+    [PSCustomObject]@{ Name="Harry Irving";   Email="harry.irving@demo.internal";   HasAuthenticator=$false; HasWHfB=$true;  HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    # TOTP only (Mode 3 special badge)
+    [PSCustomObject]@{ Name="Isabel Jones";   Email="isabel.jones@demo.internal";   HasAuthenticator=$true;  HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$true;  HasFido2=$false; HasSoftwareOath=$true;  HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    # Passkey registered (Mode 4)
+    [PSCustomObject]@{ Name="Jack King";      Email="jack.king@demo.internal";      HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$true;  IsTotpOnly=$false; HasFido2=$true;  HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    [PSCustomObject]@{ Name="Karen Lee";      Email="karen.lee@demo.internal";      HasAuthenticator=$true;  HasWHfB=$false; HasPasskey=$true;  IsTotpOnly=$false; HasFido2=$true;  HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$false },
+    # Legacy only (Mode 5)
+    [PSCustomObject]@{ Name="Liam Moore";     Email="liam.moore@demo.internal";     HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$true;  HasVoice=$false; HasEmail=$false; IsLegacyOnly=$true;  NoMethods=$false },
+    [PSCustomObject]@{ Name="Maya North";     Email="maya.north@demo.internal";     HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$true;  HasEmail=$false; IsLegacyOnly=$true;  NoMethods=$false },
+    [PSCustomObject]@{ Name="Noah Oliver";    Email="noah.oliver@demo.internal";    HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$true;  HasVoice=$false; HasEmail=$true;  IsLegacyOnly=$true;  NoMethods=$false },
+    # No methods registered
+    [PSCustomObject]@{ Name="Olivia Price";   Email="olivia.price@demo.internal";   HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  },
+    [PSCustomObject]@{ Name="Patrick Quinn";  Email="patrick.quinn@demo.internal";  HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  },
+    [PSCustomObject]@{ Name="Rachel Smith";   Email="rachel.smith@demo.internal";   HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  },
+    [PSCustomObject]@{ Name="Sam Taylor";     Email="sam.taylor@demo.internal";     HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  }
+)
+$errorUsers     = @()
+$skippedMembers = @()
+Write-Host "  Loaded $($users.Count) demo users." -ForegroundColor Green
+Write-Host ""
+
 }
 
 # ── Categorise ────────────────────────────────────────────────────────────────
@@ -681,6 +747,19 @@ if ($mode -eq 5) {
 "@
 }
 
+
+
+    $uiAccent    = "#F5CF18"
+    $uiAccentDim = "rgba(245,207,24,0.12)"
+    $bgNavy      = "#1A1A1A"
+    $bgLight     = "#242424"
+    $bgLighter   = "#2E2E2E"
+    $logoHtml    = '<div class="logo">MFAMap</div>'
+    $headerTitle = "Authentication Method Map"
+    $footerText  = 'vibecoded by <span>JS</span> &#9889;'
+    $pageTitle   = "MFAMap &mdash; $safeGroupName"
+
+
 # ── Build HTML ────────────────────────────────────────────────────────────────
 $html = @"
 <!DOCTYPE html>
@@ -688,15 +767,15 @@ $html = @"
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MFAMap &mdash; $safeGroupName</title>
+<title>$pageTitle</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --navy: #1A1A1A; --navy-light: #242424; --navy-lighter: #2E2E2E;
+    --navy: $bgNavy; --navy-light: $bgLight; --navy-lighter: $bgLighter;
     --accent: $accentColor; --accent-dim: $accentDim;
-    --ui-accent: #F5CF18; --ui-accent-dim: rgba(245,207,24,0.12);
+    --ui-accent: $uiAccent; --ui-accent-dim: $uiAccentDim;
     --red: #E66558; --red-dim: rgba(230,101,88,0.12);
     --amber: #FF8F52; --amber-dim: rgba(255,143,82,0.12);
     --yellow: #EAD654; --yellow-dim: rgba(234,214,84,0.12);
@@ -781,21 +860,33 @@ $html = @"
   .filter-bar strong { color: var(--text); }
   .filter-bar button { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-family: inherit; }
   .filter-bar button:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+    .print-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
+  .print-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+  @media print {
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .print-btn, .filter-bar { display: none !important; }
+    .stat[data-filter] { cursor: default; }
+    .collapse-body { display: block !important; }
+    .chevron { display: none; }
+    .section { break-inside: avoid; }
+    .row { break-inside: avoid; }
+  }
 </style>
 </head>
 <body>
 
 <div class="header">
   <div class="header-left">
-    <div class="logo">MFAMap</div>
+    $logoHtml
     <div>
-      <div class="header-title">Authentication Method Map</div>
+      <div class="header-title">$headerTitle</div>
       <div class="header-subtitle">$headerSubtitle</div>
     </div>
   </div>
   <div class="header-right">
     <span class="mode-badge">$safeModeLabel</span>
     <div class="generated">Generated $generatedAt</div>
+    <button class="print-btn" onclick="window.print()">Save as PDF</button>
   </div>
 </div>
 
@@ -810,10 +901,15 @@ $html = @"
 </div>
 
 <div class="footer">
-  Generated <span>$generatedAt</span> &middot; vibecoded by <span style="color:#F5CF18">JS</span> &#9889;
+  Generated <span>$generatedAt</span> &middot; $footerText
 </div>
 
 <script>
+  window.onbeforeprint = function() {
+    document.querySelectorAll('.collapse-body').forEach(function(b) { b.classList.add('open'); });
+    document.querySelectorAll('.row').forEach(function(r) { r.style.display = ''; });
+  };
+
   function toggle() {
     document.getElementById('completedBody').classList.toggle('open');
     document.getElementById('chev').classList.toggle('open');
@@ -878,12 +974,14 @@ try {
 Write-Host "  Report saved to: $OutputPath" -ForegroundColor Cyan
 Write-Host ""
 
-try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
+if (-not $Demo) {
+    try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
 
-if (Get-MgContext) {
-    Write-Host "  WARNING: Could not disconnect from Microsoft Graph. Run Disconnect-MgGraph manually." -ForegroundColor Yellow
-} else {
-    Write-Host "  Disconnected from Microsoft Graph." -ForegroundColor DarkGray
+    if (Get-MgContext) {
+        Write-Host "  WARNING: Could not disconnect from Microsoft Graph. Run Disconnect-MgGraph manually." -ForegroundColor Yellow
+    } else {
+        Write-Host "  Disconnected from Microsoft Graph." -ForegroundColor DarkGray
+    }
 }
 
 Write-Host "  Done." -ForegroundColor Green
