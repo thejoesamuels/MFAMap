@@ -22,7 +22,10 @@ param(
     [string]$GroupId,
 
     [Parameter(Mandatory = $false)]
-    [string]$OutputPath = ""
+    [string]$OutputPath = "",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$Branded
 )
 
 Add-Type -AssemblyName System.Web
@@ -681,6 +684,19 @@ if ($mode -eq 5) {
 "@
 }
 
+
+
+    $uiAccent    = "#F5CF18"
+    $uiAccentDim = "rgba(245,207,24,0.12)"
+    $bgNavy      = "#1A1A1A"
+    $bgLight     = "#242424"
+    $bgLighter   = "#2E2E2E"
+    $logoHtml    = '<div class="logo">MFAMap</div>'
+    $headerTitle = "Authentication Method Map"
+    $footerText  = 'vibecoded by <span>JS</span> &#9889;'
+    $pageTitle   = "MFAMap &mdash; $safeGroupName"
+
+
 # ── Build HTML ────────────────────────────────────────────────────────────────
 $html = @"
 <!DOCTYPE html>
@@ -688,15 +704,15 @@ $html = @"
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MFAMap &mdash; $safeGroupName</title>
+<title>$pageTitle</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --navy: #1A1A1A; --navy-light: #242424; --navy-lighter: #2E2E2E;
+    --navy: $bgNavy; --navy-light: $bgLight; --navy-lighter: $bgLighter;
     --accent: $accentColor; --accent-dim: $accentDim;
-    --ui-accent: #F5CF18; --ui-accent-dim: rgba(245,207,24,0.12);
+    --ui-accent: $uiAccent; --ui-accent-dim: $uiAccentDim;
     --red: #E66558; --red-dim: rgba(230,101,88,0.12);
     --amber: #FF8F52; --amber-dim: rgba(255,143,82,0.12);
     --yellow: #EAD654; --yellow-dim: rgba(234,214,84,0.12);
@@ -781,21 +797,34 @@ $html = @"
   .filter-bar strong { color: var(--text); }
   .filter-bar button { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-family: inherit; }
   .filter-bar button:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+    .print-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
+  .print-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+  @media print {
+    :root { --navy: #ffffff; --navy-light: #f5f5f5; --navy-lighter: #ebebeb; --text: #1a1a1a; --text-muted: #555; --text-dim: #888; --border: rgba(0,0,0,0.1); }
+    .print-btn, .filter-bar { display: none !important; }
+    .stat[data-filter] { cursor: default; }
+    .collapse-body { display: block !important; }
+    .chevron { display: none; }
+    .section { break-inside: avoid; }
+    .row { break-inside: avoid; }
+    .header { border-bottom: 1px solid #ddd; }
+  }
 </style>
 </head>
 <body>
 
 <div class="header">
   <div class="header-left">
-    <div class="logo">MFAMap</div>
+    $logoHtml
     <div>
-      <div class="header-title">Authentication Method Map</div>
+      <div class="header-title">$headerTitle</div>
       <div class="header-subtitle">$headerSubtitle</div>
     </div>
   </div>
   <div class="header-right">
     <span class="mode-badge">$safeModeLabel</span>
     <div class="generated">Generated $generatedAt</div>
+    <button class="print-btn" onclick="window.print()">Save as PDF</button>
   </div>
 </div>
 
@@ -810,10 +839,15 @@ $html = @"
 </div>
 
 <div class="footer">
-  Generated <span>$generatedAt</span> &middot; vibecoded by <span style="color:#F5CF18">JS</span> &#9889;
+  Generated <span>$generatedAt</span> &middot; $footerText
 </div>
 
 <script>
+  window.onbeforeprint = function() {
+    document.querySelectorAll('.collapse-body').forEach(function(b) { b.classList.add('open'); });
+    document.querySelectorAll('.row').forEach(function(r) { r.style.display = ''; });
+  };
+
   function toggle() {
     document.getElementById('completedBody').classList.toggle('open');
     document.getElementById('chev').classList.toggle('open');
