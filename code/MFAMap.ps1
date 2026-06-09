@@ -863,14 +863,13 @@ $html = @"
     .print-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
   .print-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
   @media print {
-    :root { --navy: #ffffff; --navy-light: #f5f5f5; --navy-lighter: #ebebeb; --text: #1a1a1a; --text-muted: #555; --text-dim: #888; --border: rgba(0,0,0,0.1); }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .print-btn, .filter-bar { display: none !important; }
     .stat[data-filter] { cursor: default; }
     .collapse-body { display: block !important; }
     .chevron { display: none; }
     .section { break-inside: avoid; }
     .row { break-inside: avoid; }
-    .header { border-bottom: 1px solid #ddd; }
   }
 </style>
 </head>
