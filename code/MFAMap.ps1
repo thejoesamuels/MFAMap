@@ -136,14 +136,28 @@ if ($OutputPath -eq "") {
 
     if ($IsWindows) {
         try {
-            Add-Type -AssemblyName System.Windows.Forms
-            $dlg = New-Object System.Windows.Forms.SaveFileDialog
-            $dlg.Title            = "Save MFAMap Report"
-            $dlg.Filter           = "HTML file (*.html)|*.html"
-            $dlg.FileName         = $suggestedName
-            $dlg.InitialDirectory = (Get-Location).Path
-            if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-                $OutputPath = $dlg.FileName
+            $staScript = {
+                param($name, $dir)
+                Add-Type -AssemblyName System.Windows.Forms
+                [System.Windows.Forms.Application]::EnableVisualStyles()
+                $dlg = New-Object System.Windows.Forms.SaveFileDialog
+                $dlg.Title            = "Save MFAMap Report"
+                $dlg.Filter           = "HTML file (*.html)|*.html"
+                $dlg.FileName         = $name
+                $dlg.InitialDirectory = $dir
+                if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $dlg.FileName }
+                else { $null }
+            }
+            $rs = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace()
+            $rs.ApartmentState = [System.Threading.ApartmentState]::STA
+            $rs.Open()
+            $ps = [System.Management.Automation.PowerShell]::Create()
+            $ps.Runspace = $rs
+            [void]$ps.AddScript($staScript).AddArgument($suggestedName).AddArgument((Get-Location).Path)
+            $dlgPath = $ps.Invoke()[0]
+            $rs.Close()
+            if ($dlgPath) {
+                $OutputPath = $dlgPath
                 $dialogUsed = $true
             } else {
                 Write-Host "  Save cancelled. Exiting." -ForegroundColor Yellow
