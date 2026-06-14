@@ -1,15 +1,6 @@
 # MFAMap — Setup Guide
 
-## What this is
-
-A PowerShell script that signs into Microsoft Graph with your admin account, queries a target Entra group for authentication method registration status, and generates a self-contained HTML report. No app registration, no server, no browser auth required.
-
-When you run it, you're prompted to choose what to track:
-- **Mode 1** — Microsoft Authenticator + Windows Hello for Business
-- **Mode 2** — Windows Hello for Business only
-- **Mode 3** — Microsoft Authenticator only
-- **Mode 4** — Passkey (FIDO2 or Authenticator device-bound passkey)
-- **Mode 5** — Full method audit (all authentication methods)
+MFAMap is a PowerShell script that signs into Microsoft Graph with your admin account, queries a target Entra group for authentication method registration, and generates a self-contained HTML report. No app registration, no server, no dependencies.
 
 ---
 
@@ -23,130 +14,116 @@ When you run it, you're prompted to choose what to track:
 
 ## Step 1 — Install the Microsoft Graph module
 
-Open PowerShell and run:
+One-time setup:
 
 ```powershell
 Install-Module Microsoft.Graph -Scope CurrentUser -Force
 ```
 
-This installs the full Microsoft Graph module. If prompted to trust the PSGallery repository, type `Y` and press Enter. This may take a few minutes.
-
-> **Note:** MFAMap only loads `Microsoft.Graph.Authentication` and `Microsoft.Graph.Groups` at runtime. All other Graph calls use `Invoke-MgGraphRequest` directly to avoid module version conflicts.
+If prompted to trust the PSGallery repository, type `Y` and press Enter. This may take a few minutes.
 
 ---
 
 ## Step 2 — Get your group's Object ID
 
 1. Go to [entra.microsoft.com](https://entra.microsoft.com)
-2. Navigate to **Groups** and find the group containing the users you want to track
+2. Navigate to **Groups** and find the group you want to track
 3. Open the group and copy the **Object ID** from the Overview page
 
 ---
 
 ## Step 3 — Run the script
 
-In PowerShell, navigate to the folder containing the script and run:
-
 ```powershell
-.\MFAMap.ps1 -GroupId "your-group-object-id"
+.\code\MFAMap.ps1 -GroupId "your-group-object-id"
 ```
 
 If you see an execution policy error:
 
 ```powershell
-PowerShell -ExecutionPolicy Bypass -File .\MFAMap.ps1 -GroupId "your-group-object-id"
+PowerShell -ExecutionPolicy Bypass -File .\code\MFAMap.ps1 -GroupId "your-group-object-id"
 ```
 
-The script will:
-1. Prompt you to choose a tracking mode (1-5) — or skip this by passing `-Mode 1` through `-Mode 5`
-2. Open a Microsoft sign-in window — sign in with your admin account
-3. Fetch the tenant name, group name, and membership
-4. Show a **save dialog** — choose where to save the report (or cancel to use the auto-named file in the current directory)
-5. Check each member's authentication methods
-6. Write the HTML report to the location you chose
+The script will prompt you to pick a tracking mode (1–5), sign in with your Microsoft admin account, then show a save dialog. Choose where to save — or cancel to auto-name the file in the current directory.
 
 ---
 
 ## Step 4 — Open the report
 
-The script prints the exact output filename on completion:
+The script prints the output path on completion:
 
 ```
   Report saved to: .\mfamap_Staff_Mode1-Auth-WHfB_2026-06-01_0930.html
+  Snapshot saved to: .\mfamap_Staff_Mode1-Auth-WHfB_2026-06-01_0930.json
 ```
 
-Double-click the file or open it in any browser. No login required.
+Double-click the HTML file or open it in any browser. No login required.
+
+Every report also has a **Save as PDF** button in the header — click it to export via the browser print dialog. The dark theme is preserved in the output.
 
 ---
 
-## Refreshing during a session
+## Recommended folder structure
 
-Re-run the script at any point:
+Keep a folder per client or per group. MFAMap writes a JSON snapshot alongside each HTML report and automatically finds it next time you run — no extra flags needed. The delta report generates itself.
 
-```powershell
-.\MFAMap.ps1 -GroupId "your-group-object-id"
+```
+Reports/
+  Contoso/
+    mfamap_AllStaff_Mode1_2026-05-01.html
+    mfamap_AllStaff_Mode1_2026-05-01.json
+    mfamap_AllStaff_Mode1_2026-06-01.html        ← standard report
+    mfamap_AllStaff_Mode1_2026-06-01.json        ← snapshot for next time
+    mfamap_AllStaff_Mode1_2026-06-01_delta.html  ← auto-generated comparison vs May
+  FabrikamLtd/
+    ...
 ```
 
-Each run produces a new timestamped file so previous snapshots are preserved. The script connects and disconnects fresh on every run — you may be prompted to sign in again, or silently re-authenticated via cached token depending on your session state. You can switch modes between runs.
+The delta report shows who enrolled, who lapsed, progress bars comparing then vs now, and users who joined or left the group since the last snapshot.
 
 ---
 
-## Additional parameters
+## Parameters
 
-**Skip the mode prompt**
+| Parameter | Required | Description |
+|---|---|---|
+| `-GroupId` | Yes (unless `-Demo`) | Object ID of the target Entra group |
+| `-Mode` | No | Pass `1`–`5` to skip the interactive mode prompt |
+| `-OutputPath` | No | Set output path directly and skip the save dialog |
+| `-Branded` | No | Produce a REDACTED branded report |
+| `-Demo` | No | Run without connecting to Graph — uses synthetic data |
 
-Pass `-Mode` with a number to go straight to a specific mode without the interactive menu:
-
-```powershell
-.\MFAMap.ps1 -GroupId "your-group-object-id" -Mode 3
-```
-
-**Custom output path**
-
-Use `-OutputPath` to specify a path directly and skip the save dialog:
+**Examples:**
 
 ```powershell
-.\MFAMap.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\mfa-report.html"
+# Standard run
+.\code\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00"
+
+# Skip mode prompt
+.\code\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -Mode 3
+
+# Custom output path
+.\code\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -OutputPath "C:\Reports\Contoso\report.html"
+
+# REDACTED branded report
+.\code\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -Branded
+
+# Demo — preview without credentials
+.\code\MFAMap.ps1 -Demo -Mode 1
+.\code\MFAMap.ps1 -Demo -Mode 5 -Branded
 ```
-
-**Branded reports**
-
-Pass `-Branded` to produce a REDACTED branded version of the report — the REDACTED wordmark replaces the MFAMap logo, the colour scheme switches to Beacon Navy and Beacon Teal, and the footer reflects the REDACTED identity:
-
-```powershell
-.\MFAMap.ps1 -GroupId "your-group-object-id" -Branded
-```
-
-**Demo mode**
-
-Run without connecting to Microsoft Graph at all. `-Demo` uses a built-in set of synthetic users to generate a fully populated report — useful for testing, previewing the layout, or showing the tool without needing a live tenant:
-
-```powershell
-# Interactive mode selection
-.\MFAMap.ps1 -Demo
-
-# Skip directly to a specific mode
-.\MFAMap.ps1 -Demo -Mode 1
-
-# Preview the branded report
-.\MFAMap.ps1 -Demo -Mode 5 -Branded
-```
-
-**Saving as PDF**
-
-Every generated report includes a **Save as PDF** button in the header. Click it to open the browser print dialog — the dark theme is preserved in the output. In Chrome and Edge, make sure **Background graphics** is ticked in the print dialog if backgrounds appear washed out.
 
 ---
 
-## Running on macOS or Linux
+## Running on macOS
 
-MFAMap works on PowerShell 7+ on macOS and Linux. Install PowerShell 7 via Homebrew on macOS:
+MFAMap works on PowerShell 7 on macOS. Install it via Homebrew:
 
 ```bash
 brew install --cask powershell
 ```
 
-Then launch it with `pwsh` and follow the same steps. The save dialog uses `osascript` on macOS and falls back to auto-naming on Linux.
+Then launch with `pwsh` and follow the same steps. The save dialog uses `osascript` on macOS and falls back to auto-naming if unavailable.
 
 ---
 
@@ -154,18 +131,16 @@ Then launch it with `pwsh` and follow the same steps. The save dialog uses `osas
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Execution policy error | Script not signed | Run with `PowerShell -ExecutionPolicy Bypass -File .\MFAMap.ps1 -GroupId "..."` or run `Set-ExecutionPolicy -Scope CurrentUser Unrestricted` |
-| `Could not retrieve group members` | Wrong Group ID or insufficient permissions | Double-check the Object ID in Entra; confirm your account has Authentication Administrator or Global Reader |
-| `No users found in this group` | Group has no direct user members | Confirm the group has direct user members (not nested groups) in Entra |
-| `WARNING: Could not retrieve tenant name` | `Organization.Read.All` not consented | Non-fatal — report still generates without the tenant name |
-| Module version conflicts | Multiple versions of Graph modules installed | Run the cleanup commands below |
-| Sign-in window doesn't appear | Running in an embedded terminal | The WAM sign-in window may appear behind other windows — check the taskbar |
-| Save dialog doesn't appear | Headless or restricted environment | The script falls back to auto-naming the file in the current directory |
-| Mode 4 shows fewer enrolments than expected | Authenticator passkeys not properly tagged | The Graph API returns this via the Authenticator method's `authenticationMode` field — older Authenticator versions may not surface this correctly |
+| Execution policy error | Script not signed | Run with `PowerShell -ExecutionPolicy Bypass -File .\code\MFAMap.ps1 -GroupId "..."` |
+| `Could not retrieve group members` | Wrong Group ID or insufficient permissions | Check the Object ID in Entra; confirm your account has Authentication Administrator or Global Reader |
+| `No users found in this group` | Group has no direct user members | Confirm the group has direct user members (not nested groups) |
+| `WARNING: Could not retrieve tenant name` | `Organization.Read.All` not consented | Non-fatal — report generates without the tenant name |
+| Module version conflicts | Multiple Graph module versions installed | Run the cleanup below |
+| Sign-in window doesn't appear | Launched from embedded terminal | The sign-in window may be behind other windows — check the taskbar |
+| Save dialog doesn't appear | Headless or restricted environment | Script falls back to auto-naming in the current directory |
+| Delta report not generated | No previous snapshot found in the output folder | A delta only generates when a matching `.json` snapshot exists in the same directory |
 
-### Module cleanup
-
-If you hit version conflicts, clean up and reinstall:
+**Module cleanup:**
 
 ```powershell
 Get-Module Microsoft.Graph* -ListAvailable | ForEach-Object { Uninstall-Module $_.Name -RequiredVersion $_.Version -Force -ErrorAction SilentlyContinue }
@@ -174,38 +149,10 @@ Install-Module Microsoft.Graph -Scope CurrentUser -Force
 
 ---
 
-## Authentication on Windows (WAM)
+## Authentication notes
 
-On Windows 10/11, `Connect-MgGraph` uses the **Web Account Manager (WAM)** — a Windows OS-level authentication broker built into the operating system. Instead of opening a browser tab, WAM shows a native Windows sign-in or account picker dialog.
+**Windows (WAM):** On Windows 10/11, `Connect-MgGraph` uses the Windows Web Account Manager — a native sign-in broker rather than a browser tab. It's aware of accounts already signed into Windows, so sign-in is often silent or just a quick account picker. Tokens are cached in Windows Credential Manager, so re-running shortly after a previous run typically skips the prompt entirely.
 
-WAM is aware of accounts already signed into Windows, including your Microsoft 365 work account. This means:
+**Switching accounts:** If you need to sign in as a different account or switch tenants, run `Disconnect-MgGraph` manually in PowerShell before the next run.
 
-- On a machine where you use your admin account day-to-day, sign-in may be silent or just show a quick account picker with no password prompt
-- On a fresh machine, you'll see the full sign-in dialog the first time
-
-**Token caching:** WAM caches tokens in the Windows Credential Manager. Re-running MFAMap shortly after a previous run will typically re-authenticate silently without prompting — the cached token is reused until it expires or the requested scopes change.
-
-**Switching accounts:** `Disconnect-MgGraph` clears the MSAL session cache but does not revoke the underlying WAM token. If you need to sign in as a different account (for example, switching between tenants), pass `-ForceRefresh` to force a fresh interactive login:
-
-```powershell
-Connect-MgGraph -Scopes "..." -ForceRefresh
-```
-
-MFAMap doesn't expose this as a parameter directly — if you need to switch accounts, run `Disconnect-MgGraph` manually in PowerShell first, then run the script.
-
-**Sign-in window appearing behind other windows:** the WAM dialog is a system-level window and doesn't always come to the foreground, particularly when launched from an embedded terminal (e.g. inside VS Code). If the script appears to hang at the connecting step, check the taskbar for a sign-in window waiting for input.
-
----
-
-## About the consent prompt
-
-When you sign in, you may see a consent screen from **Microsoft Graph Command Line Tools** listing a large number of permissions. This is the shared app registration that the Graph PowerShell SDK uses — the list reflects its full permission history in your tenant, not what MFAMap specifically requests.
-
-MFAMap only requests these five scopes at runtime:
-- `Organization.Read.All`
-- `Group.Read.All`
-- `GroupMember.Read.All`
-- `User.Read.All`
-- `UserAuthenticationMethod.Read.All`
-
-If a minimal consent screen is important (e.g. running against client tenants), create a dedicated app registration and pass `-ClientId` to `Connect-MgGraph`.
+**Consent prompt:** The first time you run against a tenant you may see a consent screen from **Microsoft Graph Command Line Tools** listing many permissions. This reflects the full history of that shared app registration in the tenant, not what MFAMap specifically requests. MFAMap only asks for these five scopes: `Organization.Read.All`, `Group.Read.All`, `GroupMember.Read.All`, `User.Read.All`, `UserAuthenticationMethod.Read.All`.
