@@ -560,6 +560,24 @@ function Get-Rows($userList, [string]$statusType, [int]$m) {
     return $rows
 }
 
+function Get-UserStatus($u, [int]$m) {
+    switch ($m) {
+        1 {
+            if ($u.HasAuthenticator -and $u.HasWHfB) { return "complete" }
+            elseif ($u.HasAuthenticator -or $u.HasWHfB) { return "partial" }
+            else { return "none" }
+        }
+        2 { if ($u.HasWHfB)          { return "complete" } else { return "none" } }
+        3 { if ($u.HasAuthenticator) { return "complete" } else { return "none" } }
+        4 { if ($u.HasPasskey)       { return "complete" } else { return "none" } }
+        5 {
+            if ($u.NoMethods)        { return "none"   }
+            elseif ($u.IsLegacyOnly) { return "legacy" }
+            else                     { return "modern" }
+        }
+    }
+}
+
 $gridCols        = Get-GridCols $mode
 $tableHeaderHtml = Get-TableHeader $mode
 $rowsNotStarted  = Get-Rows $notStarted "none"    $mode
@@ -987,6 +1005,354 @@ try {
 
 Write-Host "  Report saved to: $OutputPath" -ForegroundColor Cyan
 Write-Host ""
+
+if (-not $Demo) {
+
+# ── Snapshot & delta ──────────────────────────────────────────────────────────
+$jsonPath  = $OutputPath -replace '\.html$', '.json'
+$deltaPath = $OutputPath -replace '\.html$', '_delta.html'
+$outputDir = Split-Path $OutputPath -Parent
+if ([string]::IsNullOrEmpty($outputDir)) { $outputDir = "." }
+
+# Auto-discover previous snapshot before writing current one
+$prevSnapshot = $null
+try {
+    $candidates = Get-ChildItem -Path $outputDir -Filter "*.json" -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending
+    foreach ($c in $candidates) {
+        try {
+            $data = Get-Content $c.FullName -Raw | ConvertFrom-Json
+            if ($data.groupId -eq $GroupId -and [int]$data.mode -eq $mode) {
+                $prevSnapshot = $data
+                break
+            }
+        } catch { }
+    }
+} catch { }
+
+# Write current JSON sidecar
+$snapshotUsers = $users | ForEach-Object {
+    [PSCustomObject]@{ name = $_.Name; email = $_.Email; status = (Get-UserStatus $_ $mode) }
+}
+$snapshot = [ordered]@{
+    generatedAt = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss")
+    tenantName  = $tenantName
+    groupName   = $groupName
+    groupId     = $GroupId
+    mode        = $mode
+    modeLabel   = $modeLabel
+    users       = $snapshotUsers
+}
+try {
+    $snapshot | ConvertTo-Json -Depth 5 | Out-File -FilePath $jsonPath -Encoding UTF8 -ErrorAction Stop
+    Write-Host "  Snapshot saved to:  $jsonPath" -ForegroundColor DarkGray
+} catch {
+    Write-Host "  WARNING: Could not write snapshot file." -ForegroundColor Yellow
+}
+
+# Delta report
+if ($prevSnapshot) {
+    $prevDate    = try { [datetime]::Parse($prevSnapshot.generatedAt).ToString("d MMM yyyy") } catch { "previous run" }
+    $safePrevDate = [System.Web.HttpUtility]::HtmlEncode($prevDate)
+    Write-Host "  Comparing against snapshot from $prevDate..." -ForegroundColor DarkGray
+
+    $prevMap = @{}
+    foreach ($u in $prevSnapshot.users) { $prevMap[$u.email.ToLower()] = $u.status }
+
+    $deltaNewlyComplete = @(); $deltaNewlyLapsed = @(); $deltaProgressed = @()
+    $deltaNewToGroup    = @(); $deltaNoChange    = @()
+    $currentEmails      = @{}
+
+    foreach ($u in $users) {
+        $key       = $u.Email.ToLower()
+        $currentEmails[$key] = $true
+        $currSt    = Get-UserStatus $u $mode
+        $prevSt    = $prevMap[$key]
+        $entry     = [PSCustomObject]@{ User=$u; PrevStatus=$prevSt; CurrentStatus=$currSt }
+        if (-not $prevSt) {
+            $deltaNewToGroup += $entry
+        } elseif ($prevSt -eq $currSt) {
+            $deltaNoChange += $entry
+        } elseif ($currSt -in @("complete","modern")) {
+            $deltaNewlyComplete += $entry
+        } elseif ($prevSt -in @("complete","modern")) {
+            $deltaNewlyLapsed += $entry
+        } elseif ($currSt -eq "partial" -and $prevSt -eq "none") {
+            $deltaProgressed += $entry
+        } else {
+            $deltaNewlyLapsed += $entry
+        }
+    }
+
+    $deltaLeftGroup = @()
+    foreach ($u in $prevSnapshot.users) {
+        if (-not $currentEmails[$u.email.ToLower()]) { $deltaLeftGroup += $u }
+    }
+
+    $prevTotal    = $prevSnapshot.users.Count
+    $prevComplete = ($prevSnapshot.users | Where-Object { $_.status -in @("complete","modern") }).Count
+    $prevPct      = if ($prevTotal -gt 0) { [math]::Round(($prevComplete / $prevTotal) * 100, 1) } else { 0 }
+    $currPct      = $pctComplete
+
+    $dNewlyComplete = $deltaNewlyComplete.Count
+    $dNewlyLapsed   = $deltaNewlyLapsed.Count
+    $dProgressed    = $deltaProgressed.Count
+    $dNewToGroup    = $deltaNewToGroup.Count
+    $dLeftGroup     = $deltaLeftGroup.Count
+    $dNoChange      = $deltaNoChange.Count
+    $deltaGeneratedAt = Get-Date -Format "dd MMM yyyy 'at' HH:mm"
+
+    function Get-StatusLabel([string]$st, [int]$m) {
+        switch ($st) {
+            "complete" { if ($m -eq 1) { return "Fully Enrolled" } else { return "Registered" } }
+            "partial"  { return "Partial" }
+            "none"     { return "Not Registered" }
+            "modern"   { return "Modern Methods" }
+            "legacy"   { return "Legacy Only" }
+            default    { return $st }
+        }
+    }
+    function Get-StatusPillClass([string]$st) {
+        if ($st -in @("complete","modern")) { return "done" }
+        if ($st -in @("partial","legacy"))  { return "partial" }
+        return "none"
+    }
+    function Get-DeltaRows($entries, [int]$m, [bool]$showArrow) {
+        if ($entries.Count -eq 0) { return '<div class="empty">None</div>' }
+        $out = ""
+        foreach ($e in $entries) {
+            $n  = [System.Web.HttpUtility]::HtmlEncode($e.User.Name)
+            $em = [System.Web.HttpUtility]::HtmlEncode($e.User.Email)
+            $cc = Get-StatusPillClass $e.CurrentStatus
+            $cl = Get-StatusLabel $e.CurrentStatus $m
+            $currPillHtml = "<span class=`"pill $cc`">$cl</span>"
+            if ($showArrow -and $e.PrevStatus) {
+                $pc = Get-StatusPillClass $e.PrevStatus
+                $pl = Get-StatusLabel $e.PrevStatus $m
+                $status = "<span class=`"arrow`"><span class=`"pill $pc`">$pl</span> &rarr; $currPillHtml</span>"
+            } else { $status = $currPillHtml }
+            $out += "<div class=`"delta-row`"><div class=`"cell`"><span class=`"name`">$n</span><span class=`"email`">$em</span></div><div>$status</div></div>"
+        }
+        return $out
+    }
+    function Get-LeftGroupRows($entries) {
+        if ($entries.Count -eq 0) { return '<div class="empty">None</div>' }
+        $out = ""
+        foreach ($e in $entries) {
+            $n  = [System.Web.HttpUtility]::HtmlEncode($e.name)
+            $em = [System.Web.HttpUtility]::HtmlEncode($e.email)
+            $pc = Get-StatusPillClass $e.status
+            $pl = Get-StatusLabel $e.status $mode
+            $out += "<div class=`"delta-row`"><div class=`"cell`"><span class=`"name`">$n</span><span class=`"email`">$em</span></div><div><span class=`"pill $pc`">$pl</span></div></div>"
+        }
+        return $out
+    }
+
+    $rowsNewlyComplete = Get-DeltaRows $deltaNewlyComplete $mode $true
+    $rowsNewlyLapsed   = Get-DeltaRows $deltaNewlyLapsed   $mode $true
+    $rowsProgressed    = Get-DeltaRows $deltaProgressed    $mode $true
+    $rowsNewToGroup    = Get-DeltaRows $deltaNewToGroup    $mode $false
+    $rowsLeftGroup     = Get-LeftGroupRows $deltaLeftGroup
+    $rowsNoChange      = Get-DeltaRows $deltaNoChange      $mode $false
+
+    $deltaStatCards = @"
+    <div class="stat complete"><div class="stat-label">Newly Enrolled</div><div class="stat-number">$dNewlyComplete</div><div class="stat-sub">since $safePrevDate</div></div>
+    <div class="stat remaining"><div class="stat-label">Lapsed</div><div class="stat-number">$dNewlyLapsed</div><div class="stat-sub">since $safePrevDate</div></div>
+    <div class="stat total"><div class="stat-label">New to Group</div><div class="stat-number">$dNewToGroup</div><div class="stat-sub">not in previous snapshot</div></div>
+    <div class="stat total"><div class="stat-label">Left Group</div><div class="stat-number">$dLeftGroup</div><div class="stat-sub">removed since $safePrevDate</div></div>
+"@
+    if ($mode -eq 1 -and $dProgressed -gt 0) {
+        $deltaStatCards += "    <div class=`"stat partial`"><div class=`"stat-label`">Progressed</div><div class=`"stat-number`">$dProgressed</div><div class=`"stat-sub`">none &rarr; partial</div></div>`n"
+    }
+
+    $regressedSection  = if ($dNewlyLapsed -gt 0) { "<div class=`"section`"><div class=`"section-header`"><span class=`"section-title remaining`">Lapsed</span><span class=`"section-count remaining`">$dNewlyLapsed</span></div><div class=`"table`">$rowsNewlyLapsed</div></div>" } else { "" }
+    $progressedSection = if ($mode -eq 1 -and $dProgressed -gt 0) { "<div class=`"section`"><div class=`"section-header`"><span class=`"section-title partial`">Progressed</span><span class=`"section-count partial`">$dProgressed</span></div><div class=`"table`">$rowsProgressed</div></div>" } else { "" }
+    $newToGroupSection = if ($dNewToGroup -gt 0) { "<div class=`"section`"><div class=`"section-header`"><span class=`"section-title`" style=`"color:var(--text-muted)`">New to Group</span><span class=`"section-count`" style=`"background:rgba(255,255,255,0.06);color:var(--text-muted)`">$dNewToGroup</span></div><div class=`"table`">$rowsNewToGroup</div></div>" } else { "" }
+    $leftGroupSection  = if ($dLeftGroup -gt 0)  { "<div class=`"section`"><div class=`"section-header`"><span class=`"section-title`" style=`"color:var(--text-muted)`">Left Group</span><span class=`"section-count`" style=`"background:rgba(255,255,255,0.06);color:var(--text-muted)`">$dLeftGroup</span></div><div class=`"table`">$rowsLeftGroup</div></div>" } else { "" }
+
+$deltaHtml = @"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>$pageTitle &mdash; Delta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: $bgNavy; --navy-light: $bgLight; --navy-lighter: $bgLighter;
+    --accent: $accentColor; --accent-dim: $accentDim;
+    --ui-accent: $uiAccent; --ui-accent-dim: $uiAccentDim;
+    --red: #E66558; --red-dim: rgba(230,101,88,0.12);
+    --amber: #FF8F52; --amber-dim: rgba(255,143,82,0.12);
+    --text: #FFFFFF; --text-muted: #9E9E9E; --text-dim: #606060;
+    --border: rgba(255,255,255,0.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--navy); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+  .header { background: var(--navy-light); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo { background: var(--ui-accent); border-radius: 8px; padding: 6px 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: #1A1A1A; letter-spacing: -0.02em; }
+    .header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .header-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .mode-badge { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 99px; background: var(--ui-accent-dim); color: var(--ui-accent); }
+  .delta-badge { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 99px; background: rgba(255,255,255,0.06); color: var(--text-muted); }
+  .generated { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); }
+  .main { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+  .progress-compare { background: var(--navy-light); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 24px; }
+  .progress-compare-label { font-size: 10px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; white-space: nowrap; }
+  .progress-compare-bars { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .prog-row { display: flex; align-items: center; gap: 10px; }
+  .prog-label { font-size: 11px; color: var(--text-dim); width: 80px; text-align: right; font-family: 'JetBrains Mono', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prog-track { flex: 1; height: 6px; background: var(--navy-lighter); border-radius: 99px; overflow: hidden; }
+  .prog-fill-prev { height: 100%; background: var(--text-dim); border-radius: 99px; width: $prevPct%; }
+  .prog-fill-curr { height: 100%; background: var(--accent); border-radius: 99px; width: $currPct%; }
+  .prog-pct { font-size: 11px; font-family: 'JetBrains Mono', monospace; width: 38px; }
+  .prog-pct.prev { color: var(--text-dim); }
+  .prog-pct.curr { color: var(--accent); font-weight: 600; }
+  .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 20px; }
+  .stat { background: var(--navy-light); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; position: relative; overflow: hidden; }
+  .stat::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+  .stat.total::before { background: var(--text-dim); }
+  .stat.remaining::before { background: var(--red); }
+  .stat.partial::before { background: var(--amber); }
+  .stat.complete::before { background: var(--accent); }
+  .stat-label { font-size: 10px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+  .stat-number { font-family: 'JetBrains Mono', monospace; font-size: 34px; font-weight: 700; line-height: 1; margin-bottom: 5px; }
+  .stat.total .stat-number { color: var(--text); }
+  .stat.remaining .stat-number { color: var(--red); }
+  .stat.partial .stat-number { color: var(--amber); }
+  .stat.complete .stat-number { color: var(--accent); }
+  .stat-sub { font-size: 11px; color: var(--text-dim); }
+  .section { margin-bottom: 20px; }
+  .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
+  .section-title.remaining { color: var(--red); }
+  .section-title.partial { color: var(--amber); }
+  .section-title.complete { color: var(--accent); }
+  .section-count { font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 2px 8px; border-radius: 99px; font-weight: 600; }
+  .section-count.remaining { background: var(--red-dim); color: var(--red); }
+  .section-count.partial { background: var(--amber-dim); color: var(--amber); }
+  .section-count.complete { background: var(--accent-dim); color: var(--accent); }
+  .table { background: var(--navy-light); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .delta-row { display: grid; grid-template-columns: 1fr auto; padding: 12px 18px; border-bottom: 1px solid var(--border); align-items: center; gap: 16px; }
+  .delta-row:last-child { border-bottom: none; }
+  .delta-row:hover { background: rgba(255,255,255,0.02); }
+  .cell { display: flex; flex-direction: column; }
+  .name { font-size: 14px; font-weight: 500; }
+  .email { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+  .arrow { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 13px; }
+  .pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 99px; display: inline-block; }
+  .pill.done { background: var(--accent-dim); color: var(--accent); }
+  .pill.partial { background: var(--amber-dim); color: var(--amber); }
+  .pill.none { background: var(--red-dim); color: var(--red); }
+  .collapse-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; background: none; border: none; color: inherit; font-family: inherit; padding: 0; }
+  .chevron { font-size: 10px; color: var(--text-dim); transition: transform 0.2s; display: inline-block; }
+  .chevron.open { transform: rotate(90deg); }
+  .collapse-body { display: none; }
+  .collapse-body.open { display: block; }
+  .empty { padding: 22px; text-align: center; font-size: 13px; color: var(--text-dim); }
+  .footer { text-align: center; padding: 18px; font-size: 11px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
+  .footer span { color: var(--ui-accent); }
+  @media print {
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .collapse-body { display: block !important; }
+    .chevron { display: none; }
+    .section { break-inside: avoid; }
+    .delta-row { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    $logoHtml
+    <div>
+      <div class="header-title">$headerTitle</div>
+      <div class="header-subtitle">$headerSubtitle</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="mode-badge">$safeModeLabel</span>
+    <span class="delta-badge">Delta &mdash; since $safePrevDate</span>
+    <div class="generated">Generated $deltaGeneratedAt</div>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="progress-compare">
+    <div class="progress-compare-label">Enrolment<br>Progress</div>
+    <div class="progress-compare-bars">
+      <div class="prog-row">
+        <div class="prog-label">$safePrevDate</div>
+        <div class="prog-track"><div class="prog-fill-prev"></div></div>
+        <div class="prog-pct prev">$prevPct%</div>
+      </div>
+      <div class="prog-row">
+        <div class="prog-label">Now</div>
+        <div class="prog-track"><div class="prog-fill-curr"></div></div>
+        <div class="prog-pct curr">$currPct%</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats">
+    $deltaStatCards
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title complete">Newly Enrolled</span>
+      <span class="section-count complete">$dNewlyComplete</span>
+    </div>
+    <div class="table">$rowsNewlyComplete</div>
+  </div>
+
+  $regressedSection
+
+  $progressedSection
+
+  $newToGroupSection
+
+  $leftGroupSection
+
+  <div class="section">
+    <div class="section-header">
+      <button class="collapse-toggle" onclick="document.getElementById('nc').classList.toggle('open');document.getElementById('nchev').classList.toggle('open')">
+        <span class="section-title" style="color:var(--text-muted)">No Change</span>
+        <span class="section-count" style="background:rgba(255,255,255,0.06);color:var(--text-muted)">$dNoChange</span>
+        <span class="chevron" id="nchev">&#9658;</span>
+      </button>
+    </div>
+    <div class="collapse-body" id="nc">
+      <div class="table">$rowsNoChange</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  Generated <span>$deltaGeneratedAt</span> &middot; $footerText
+</div>
+
+</body>
+</html>
+"@
+
+    try {
+        $deltaHtml | Out-File -FilePath $deltaPath -Encoding UTF8 -ErrorAction Stop
+        Write-Host "  Delta report saved to: $deltaPath" -ForegroundColor Cyan
+    } catch {
+        Write-Host "  WARNING: Could not write delta report." -ForegroundColor Yellow
+    }
+}
+
+}
 
 if (-not $Demo) {
     try { Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null } catch {}
