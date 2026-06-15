@@ -796,18 +796,15 @@ if ($mode -eq 5) {
 "@
 }
 
-
-
-    $uiAccent    = "#F5CF18"
-    $uiAccentDim = "rgba(245,207,24,0.12)"
-    $bgNavy      = "#1A1A1A"
-    $bgLight     = "#242424"
-    $bgLighter   = "#2E2E2E"
-    $logoHtml    = '<div class="logo">MFAMap</div>'
-    $headerTitle = "Authentication Method Map"
-    $footerText  = 'vibecoded by <span>JS</span> &#9889;'
-    $pageTitle   = "MFAMap &mdash; $safeGroupName"
-
+$uiAccent    = "#F5CF18"
+$uiAccentDim = "rgba(245,207,24,0.12)"
+$bgNavy      = "#1A1A1A"
+$bgLight     = "#242424"
+$bgLighter   = "#2E2E2E"
+$logoHtml    = '<div class="logo">MFAMap</div>'
+$headerTitle = "Authentication Method Map"
+$footerText  = 'vibecoded by <span>JS</span> &#9889;'
+$pageTitle   = "MFAMap &mdash; $safeGroupName"
 
 # ── Build HTML ────────────────────────────────────────────────────────────────
 $html = @"
@@ -909,7 +906,7 @@ $html = @"
   .filter-bar strong { color: var(--text); }
   .filter-bar button { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-family: inherit; }
   .filter-bar button:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
-    .print-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
+  .print-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
   .print-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
   @media print {
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -1212,7 +1209,7 @@ $deltaHtml = @"
   .header { background: var(--navy-light); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
   .header-left { display: flex; align-items: center; gap: 14px; }
   .logo { background: var(--ui-accent); border-radius: 8px; padding: 6px 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: #1A1A1A; letter-spacing: -0.02em; }
-    .header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
   .header-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   .header-right { display: flex; align-items: center; gap: 12px; }
   .mode-badge { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 99px; background: var(--ui-accent-dim); color: var(--ui-accent); }
