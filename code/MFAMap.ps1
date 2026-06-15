@@ -37,6 +37,11 @@ if (-not $Demo -and [string]::IsNullOrEmpty($GroupId)) {
     exit 1
 }
 
+# PS5 compatibility — $IsWindows/$IsMacOS don't exist in Windows PowerShell 5.1
+if ($null -eq (Get-Variable 'IsWindows' -ErrorAction SilentlyContinue)) {
+    $IsWindows = $true; $IsMacOS = $false; $IsLinux = $false
+}
+
 Add-Type -AssemblyName System.Web
 
 Get-Module Microsoft.Graph.Authentication -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1 | Import-Module -Force
@@ -135,35 +140,47 @@ if ($OutputPath -eq "") {
     $dialogUsed = $false
 
     if ($IsWindows) {
+        $dlgPath      = $null
+        $dlgCancelled = $false
         try {
             $staScript = {
                 param($name, $dir)
                 Add-Type -AssemblyName System.Windows.Forms
-                [System.Windows.Forms.Application]::EnableVisualStyles()
                 $dlg = New-Object System.Windows.Forms.SaveFileDialog
                 $dlg.Title            = "Save MFAMap Report"
                 $dlg.Filter           = "HTML file (*.html)|*.html"
                 $dlg.FileName         = $name
                 $dlg.InitialDirectory = $dir
+                $dlg.TopMost          = $true
                 if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $dlg.FileName }
-                else { $null }
+                else { "" }
             }
             $rs = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace()
             $rs.ApartmentState = [System.Threading.ApartmentState]::STA
             $rs.Open()
-            $ps = [System.Management.Automation.PowerShell]::Create()
-            $ps.Runspace = $rs
-            [void]$ps.AddScript($staScript).AddArgument($suggestedName).AddArgument((Get-Location).Path)
-            $dlgPath = $ps.Invoke()[0]
+            $psCmd = [System.Management.Automation.PowerShell]::Create()
+            $psCmd.Runspace = $rs
+            [void]$psCmd.AddScript($staScript).AddArgument($suggestedName).AddArgument((Get-Location).Path)
+            $result = $psCmd.Invoke()
             $rs.Close()
-            if ($dlgPath) {
-                $OutputPath = $dlgPath
-                $dialogUsed = $true
+            if ($psCmd.HadErrors) {
+                Write-Host "  [warn] Save dialog failed: $($psCmd.Streams.Errors[0].Exception.Message)" -ForegroundColor DarkGray
+            } elseif ($result.Count -gt 0 -and $result[0]) {
+                $dlgPath = $result[0]
             } else {
-                Write-Host "  Save cancelled. Exiting." -ForegroundColor Yellow
-                exit 0
+                $dlgCancelled = $true
             }
-        } catch { }
+        } catch {
+            Write-Host "  [warn] Save dialog error: $($_.Exception.Message)" -ForegroundColor DarkGray
+        }
+
+        if ($dlgCancelled) {
+            Write-Host "  Save cancelled. Exiting." -ForegroundColor Yellow
+            exit 0
+        } elseif ($dlgPath) {
+            $OutputPath = $dlgPath
+            $dialogUsed = $true
+        }
     } elseif ($IsMacOS) {
         try {
             $osResult = osascript -e "POSIX path of (choose file name with prompt `"Save MFAMap Report`" default name `"$suggestedName`")" 2>$null
