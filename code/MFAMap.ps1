@@ -37,6 +37,11 @@ if (-not $Demo -and [string]::IsNullOrEmpty($GroupId)) {
     exit 1
 }
 
+# PS5 compatibility — $IsWindows/$IsMacOS don't exist in Windows PowerShell 5.1
+if ($null -eq (Get-Variable 'IsWindows' -ErrorAction SilentlyContinue)) {
+    $IsWindows = $true; $IsMacOS = $false; $IsLinux = $false
+}
+
 Add-Type -AssemblyName System.Web
 
 Get-Module Microsoft.Graph.Authentication -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1 | Import-Module -Force
