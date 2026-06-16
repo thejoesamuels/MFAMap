@@ -37,7 +37,7 @@ if (-not $Demo -and [string]::IsNullOrEmpty($GroupId)) {
     exit 1
 }
 
-$ScriptVersion = "2.2.0"
+$ScriptVersion = "2.2.1"
 
 # PS5 compatibility — $IsWindows/$IsMacOS don't exist in Windows PowerShell 5.1
 if ($null -eq (Get-Variable 'IsWindows' -ErrorAction SilentlyContinue)) {
