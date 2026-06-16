@@ -52,11 +52,12 @@ Get-Module Microsoft.Graph.Groups         -ListAvailable | Sort-Object Version -
 # ── Mode selection ────────────────────────────────────────────────────────────
 Write-Host ""
 $splash = @'
-  __  __ _____   ___  __  __
- |  \/  |  ___|/ _ \|  \/  | __ _ _ __
- | |\/| || |_ / /_\ \| |\/| |/ _` | '_ \
- | |  | ||  _||  _  || |  | || (_| | | |_) |
- |_|  |_||_|  |_| |_||_|  |_|\__,_| | .__/
+ __  __ _____ _    __  __
+|  \/  |  ___/ \  |  \/  | __ _ _ __
+| |\/| | |_ / _ \ | |\/| |/ _` | '_ \
+| |  | |  _/ ___ \| |  | | (_| | |_) |
+|_|  |_|_|/_/   \_\_|  |_|\__,_| .__/
+                               |_|
 '@
 Write-Host $splash -ForegroundColor Yellow
 Write-Host "  v$ScriptVersion" -ForegroundColor DarkGray
