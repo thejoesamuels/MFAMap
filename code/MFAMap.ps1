@@ -55,11 +55,10 @@ $splash = @'
   __  __ _____   ___  __  __
  |  \/  |  ___|/ _ \|  \/  | __ _ _ __
  | |\/| || |_ / /_\ \| |\/| |/ _` | '_ \
- | |  | ||  _||  _  || |  | || (_| | |_) |
- |_|  |_||_|  |_| |_||_|  |_|\__,_| .__/
-                                    |_|
+ | |  | ||  _||  _  || |  | || (_| || |_) |
+ |_|  |_||_|  |_| |_||_|  |_|\__,_|| .__/
 '@
-Write-Host $splash -ForegroundColor Cyan
+Write-Host $splash -ForegroundColor Yellow
 Write-Host "  v$ScriptVersion" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Select tracking mode:" -ForegroundColor White
