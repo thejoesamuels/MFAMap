@@ -915,7 +915,7 @@ $html = @"
   .print-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
   .print-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
   @media print {
-    @page { margin: 0.5cm; }
+    @page { margin: 0; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .print-btn, .filter-bar { display: none !important; }
     .stat[data-filter] { cursor: default; }
@@ -1285,7 +1285,7 @@ $deltaHtml = @"
   .footer { text-align: center; padding: 18px; font-size: 11px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
   .footer span { color: var(--ui-accent); }
   @media print {
-    @page { margin: 0.5cm; }
+    @page { margin: 0; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .collapse-body { display: block !important; }
     .chevron { display: none; }
