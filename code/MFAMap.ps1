@@ -609,6 +609,7 @@ function Get-UserStatus($u, [int]$m) {
 }
 
 $gridCols        = Get-GridCols $mode
+$printGridCols   = if ($mode -eq 5) { "1fr 72px 64px 64px 86px 52px 60px 72px 86px" } else { $gridCols }
 $tableHeaderHtml = Get-TableHeader $mode
 $rowsNotStarted  = Get-Rows $notStarted "none"    $mode
 $rowsPartial     = Get-Rows $partial    "partial" $mode
@@ -923,13 +924,14 @@ $html = @"
   .print-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
   @media print {
     @page { margin: 0; }
-    html { zoom: 0.9; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .print-btn, .filter-bar { display: none !important; }
     .stat[data-filter] { cursor: default; }
     .collapse-body { display: block !important; }
     .chevron { display: none; }
-    .row { break-inside: avoid; }
+    .section-header { break-after: avoid; }
+    .table-header { break-after: avoid; grid-template-columns: $printGridCols !important; }
+    .row { break-inside: avoid; grid-template-columns: $printGridCols !important; }
     .header { padding: 10px 18px !important; }
     .main { padding: 14px 18px !important; }
     .stats { gap: 8px !important; margin-bottom: 14px !important; }
@@ -1297,6 +1299,7 @@ $deltaHtml = @"
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .collapse-body { display: block !important; }
     .chevron { display: none; }
+    .section-header { break-after: avoid; }
     .delta-row { break-inside: avoid; }
     .header { padding: 10px 18px !important; }
     .main { padding: 14px 18px !important; }
