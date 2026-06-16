@@ -2,6 +2,28 @@
 
 ---
 
+## [2.2.1] — 2026-06-16
+
+### Fixes
+
+**Splash screen** — the terminal now displays an ASCII art MFAMap header on startup, replacing the plain single-line version. Makes it immediately clear which script you're running and which version.
+
+**PDF print alignment (Mode 5)** — method columns in Full Method Audit reports now line up correctly with their headers when printing to PDF. Long email addresses that previously bled into the adjacent column are now clipped cleanly. Page breaks no longer orphan section headers from their tables.
+
+---
+
+## [2.2.0] — 2026-06-15
+
+### New features
+
+**Delta reports** — running the script against a group that was previously audited now automatically generates a second report showing what changed. Who enrolled, who dis-enrolled, who changed methods — all compared against the last snapshot. No extra flags needed; snapshots are saved alongside the HTML report and discovered automatically by naming convention.
+
+### Fixes
+
+**Windows save dialog** — fixed the dialog not appearing when running under PowerShell 5.1 (`powershell.exe`), where `$IsWindows` is undefined and the dialog block was silently skipped. The dialog now renders on top of other windows so it can't be hidden behind the terminal, and errors from the dialog runspace are surfaced rather than swallowed.
+
+---
+
 ## [2.1.0] — 2026-06-09
 
 ### New features
