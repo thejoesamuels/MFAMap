@@ -915,6 +915,7 @@ $html = @"
   .print-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
   .print-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
   @media print {
+    @page { margin: 1.2cm 1cm; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .print-btn, .filter-bar { display: none !important; }
     .stat[data-filter] { cursor: default; }
@@ -922,6 +923,12 @@ $html = @"
     .chevron { display: none; }
     .section { break-inside: avoid; }
     .row { break-inside: avoid; }
+    .header { padding: 10px 18px !important; }
+    .main { padding: 14px 18px !important; }
+    .stats { gap: 8px !important; margin-bottom: 14px !important; }
+    .stat { padding: 10px 14px !important; }
+    .stat-number { font-size: 26px !important; }
+    .progress-wrap { padding: 10px 14px !important; margin-bottom: 14px !important; }
   }
 </style>
 </head>
@@ -1278,11 +1285,14 @@ $deltaHtml = @"
   .footer { text-align: center; padding: 18px; font-size: 11px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
   .footer span { color: var(--ui-accent); }
   @media print {
+    @page { margin: 1.2cm 1cm; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .collapse-body { display: block !important; }
     .chevron { display: none; }
     .section { break-inside: avoid; }
     .delta-row { break-inside: avoid; }
+    .header { padding: 10px 18px !important; }
+    .main { padding: 14px 18px !important; }
   }
 </style>
 </head>
