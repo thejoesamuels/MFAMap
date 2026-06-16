@@ -37,6 +37,8 @@ if (-not $Demo -and [string]::IsNullOrEmpty($GroupId)) {
     exit 1
 }
 
+$ScriptVersion = "2.2.0"
+
 # PS5 compatibility — $IsWindows/$IsMacOS don't exist in Windows PowerShell 5.1
 if ($null -eq (Get-Variable 'IsWindows' -ErrorAction SilentlyContinue)) {
     $IsWindows = $true; $IsMacOS = $false; $IsLinux = $false
@@ -49,7 +51,7 @@ Get-Module Microsoft.Graph.Groups         -ListAvailable | Sort-Object Version -
 
 # ── Mode selection ────────────────────────────────────────────────────────────
 Write-Host ""
-Write-Host "  MFAMap" -ForegroundColor Cyan
+Write-Host "  MFAMap v$ScriptVersion" -ForegroundColor Cyan
 Write-Host "  Authentication Method Mapper" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Select tracking mode:" -ForegroundColor White
@@ -163,10 +165,14 @@ if ($OutputPath -eq "") {
             [void]$psCmd.AddScript($staScript).AddArgument($suggestedName).AddArgument((Get-Location).Path)
             $result = $psCmd.Invoke()
             $rs.Close()
-            if ($psCmd.HadErrors) {
-                Write-Host "  [warn] Save dialog failed: $($psCmd.Streams.Errors[0].Exception.Message)" -ForegroundColor DarkGray
-            } elseif ($result.Count -gt 0 -and $result[0]) {
+            if ($result.Count -gt 0 -and $result[0]) {
                 $dlgPath = $result[0]
+            } elseif ($result.Count -gt 0 -and $result[0] -eq "") {
+                $dlgCancelled = $true
+            } elseif ($psCmd.HadErrors) {
+                $firstErr = $psCmd.Streams.Errors[0]
+                $errMsg   = if ($firstErr.Exception) { $firstErr.Exception.Message } else { $firstErr.ToString() }
+                Write-Host "  [warn] Save dialog failed: $errMsg" -ForegroundColor DarkGray
             } else {
                 $dlgCancelled = $true
             }
