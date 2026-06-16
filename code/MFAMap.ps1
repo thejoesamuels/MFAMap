@@ -924,12 +924,12 @@ $html = @"
   .print-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
   @media print {
     @page { margin: 0; }
+    html { zoom: 0.9; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .print-btn, .filter-bar { display: none !important; }
     .stat[data-filter] { cursor: default; }
     .collapse-body { display: block !important; }
     .chevron { display: none; }
-    .section { break-inside: avoid; }
     .row { break-inside: avoid; }
     .header { padding: 10px 18px !important; }
     .main { padding: 14px 18px !important; }
@@ -1294,10 +1294,10 @@ $deltaHtml = @"
   .footer span { color: var(--ui-accent); }
   @media print {
     @page { margin: 0; }
+    html { zoom: 0.9; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .collapse-body { display: block !important; }
     .chevron { display: none; }
-    .section { break-inside: avoid; }
     .delta-row { break-inside: avoid; }
     .header { padding: 10px 18px !important; }
     .main { padding: 14px 18px !important; }
