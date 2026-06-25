@@ -2,6 +2,16 @@
 
 ---
 
+## [2.3.0] — 2026-06-25
+
+### New features
+
+**Mode 5 risk filters** — the Full Method Audit report now has a "Risk filters" strip that lets you instantly cut down to users who would be affected by disabling a legacy method. **SMS Only** shows users whose only registered method is SMS, **Voice Only** does the same for voice calls, and **Legacy Only** shows anyone with no modern method at all. Click the same button again to clear. The section counts update live to show how many of that group are visible.
+
+**Download CSV** — when a risk filter is active, a Download CSV button appears in the filter bar alongside Copy UPNs. It exports the filtered users as a simple Name + UPN CSV, one entry per line, named after the active filter (e.g. `mfamap-sms-only.csv`). Paste it straight into an Entra group import to build a scoped policy group before turning off a legacy method.
+
+---
+
 ## [2.2.1] — 2026-06-16
 
 ### Fixes

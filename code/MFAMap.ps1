@@ -37,7 +37,7 @@ if (-not $Demo -and [string]::IsNullOrEmpty($GroupId)) {
     exit 1
 }
 
-$ScriptVersion = "2.2.1"
+$ScriptVersion = "2.3.0"
 
 # PS5 compatibility — $IsWindows/$IsMacOS don't exist in Windows PowerShell 5.1
 if ($null -eq (Get-Variable 'IsWindows' -ErrorAction SilentlyContinue)) {
@@ -578,7 +578,8 @@ function Get-Rows($userList, [string]$statusType, [int]$m) {
             $dv = if ($u.HasVoice)         { 1 } else { 0 }
             $de = if ($u.HasEmail)         { 1 } else { 0 }
             $dn = if ($u.NoMethods)        { 1 } else { 0 }
-            $dataAttrs = " data-auth=`"$da`" data-whfb=`"$dw`" data-fido2=`"$df`" data-oath=`"$do`" data-sms=`"$ds`" data-voice=`"$dv`" data-email=`"$de`" data-none=`"$dn`""
+            $dl = if ($u.IsLegacyOnly)    { 1 } else { 0 }
+            $dataAttrs = " data-auth=`"$da`" data-whfb=`"$dw`" data-fido2=`"$df`" data-oath=`"$do`" data-sms=`"$ds`" data-voice=`"$dv`" data-email=`"$de`" data-none=`"$dn`" data-legacy=`"$dl`""
         }
         $rows += @"
         <div class="row"$dataAttrs>
@@ -638,7 +639,12 @@ if ($mode -eq 5) {
     $cntSms   = ($users | Where-Object { $_.HasSms }).Count
     $cntVoice = ($users | Where-Object { $_.HasVoice }).Count
     $cntEmail = ($users | Where-Object { $_.HasEmail }).Count
-    $cntNone  = $noMethodsGroup.Count
+    $cntNone      = $noMethodsGroup.Count
+    $cntSmsRisk   = ($users | Where-Object { $_.IsLegacyOnly -and $_.HasSms }).Count
+    $cntVoiceRisk = ($users | Where-Object { $_.IsLegacyOnly -and $_.HasVoice }).Count
+    $smsRiskZero   = if ($cntSmsRisk -eq 0)   { " zero" } else { "" }
+    $voiceRiskZero = if ($cntVoiceRisk -eq 0) { " zero" } else { "" }
+    $legacyRiskZero = if ($legacyOnlyCount -eq 0) { " zero" } else { "" }
 }
 
 if ($mode -eq 1) {
@@ -720,9 +726,18 @@ if ($mode -eq 5) {
     $mainSections = @"
   <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">$totalUsers users &middot; <span style="color:var(--amber)">$legacyOnlyCount legacy-only</span> &middot; <span style="color:var(--red)">$noMethodsCount with no methods</span></p>
 
+  <div class="risk-filters">
+    <span class="risk-label">Risk filters</span>
+    <button class="risk-btn$smsRiskZero" data-risk="sms-risk" onclick="filterBy('sms-risk')">SMS Only <span>$cntSmsRisk</span></button>
+    <button class="risk-btn$voiceRiskZero" data-risk="voice-risk" onclick="filterBy('voice-risk')">Voice Only <span>$cntVoiceRisk</span></button>
+    <button class="risk-btn$legacyRiskZero" data-risk="legacy" onclick="filterBy('legacy')">Legacy Only <span>$legacyOnlyCount</span></button>
+  </div>
+
   <div id="filterBar" class="filter-bar" style="display:none">
     Filtering by <strong id="filterLabel"></strong>
-    <button onclick="filterBy(activeFilter)">Clear</button>
+    <button id="copyBtn" onclick="copyUPNs()">Copy UPNs</button>
+    <button id="csvBtn" onclick="downloadCSV()">Download CSV</button>
+    <button onclick="clearFilter()">Clear</button>
   </div>
 
   <div class="section">
@@ -921,12 +936,20 @@ $html = @"
   .filter-bar strong { color: var(--text); }
   .filter-bar button { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 2px 8px; border-radius: 6px; cursor: pointer; font-family: inherit; }
   .filter-bar button:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+  .risk-filters { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .risk-label { font-size: 10px; font-weight: 500; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.07em; margin-right: 4px; }
+  .risk-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  .risk-btn span { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--amber); }
+  .risk-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+  .risk-btn.active { border-color: var(--amber); color: var(--amber); }
+  .risk-btn.active span { color: var(--amber); }
+  .risk-btn.zero { opacity: 0.4; pointer-events: none; }
   .print-btn { background: none; border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-family: inherit; transition: border-color 0.15s, color 0.15s; }
   .print-btn:hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
   @media print {
     @page { margin: 0; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .print-btn, .filter-bar { display: none !important; }
+    .print-btn, .filter-bar, .risk-filters { display: none !important; }
     .stat[data-filter] { cursor: default; }
     .collapse-body { display: block !important; }
     .chevron { display: none; }
@@ -989,17 +1012,31 @@ $html = @"
   let activeFilter = null;
   const filterLabels = {
     auth: 'Microsoft Authenticator', whfb: 'WHfB', fido2: 'FIDO2', oath: 'Software OATH',
-    sms: 'SMS', voice: 'Voice', email: 'Email OTP', none: 'No Methods'
+    sms: 'SMS', voice: 'Voice', email: 'Email OTP', none: 'No Methods',
+    'sms-risk': 'SMS Only', 'voice-risk': 'Voice Only', legacy: 'Legacy Only'
   };
+
+  function rowMatchesFilter(row, filter) {
+    if (!filter) return true;
+    if (filter === 'sms-risk')   return row.dataset.sms === '1' && row.dataset.legacy === '1';
+    if (filter === 'voice-risk') return row.dataset.voice === '1' && row.dataset.legacy === '1';
+    if (filter === 'legacy')     return row.dataset.legacy === '1';
+    return row.getAttribute('data-' + filter) === '1';
+  }
 
   function filterBy(method) {
     activeFilter = (activeFilter === method) ? null : method;
     applyFilter();
   }
 
+  function clearFilter() {
+    activeFilter = null;
+    applyFilter();
+  }
+
   function applyFilter() {
     document.querySelectorAll('.row[data-auth]').forEach(row => {
-      row.style.display = (!activeFilter || row.getAttribute('data-' + activeFilter) === '1') ? '' : 'none';
+      row.style.display = rowMatchesFilter(row, activeFilter) ? '' : 'none';
     });
 
     if (activeFilter) {
@@ -1010,6 +1047,10 @@ $html = @"
 
     document.querySelectorAll('.stat[data-filter]').forEach(card => {
       card.classList.toggle('active', card.getAttribute('data-filter') === activeFilter);
+    });
+
+    document.querySelectorAll('.risk-btn[data-risk]').forEach(btn => {
+      btn.classList.toggle('active', btn.getAttribute('data-risk') === activeFilter);
     });
 
     document.querySelectorAll('.section').forEach(section => {
@@ -1027,6 +1068,36 @@ $html = @"
       bar.style.display = activeFilter ? 'flex' : 'none';
       if (activeFilter) document.getElementById('filterLabel').textContent = filterLabels[activeFilter];
     }
+  }
+
+  function copyUPNs() {
+    const upns = Array.from(document.querySelectorAll('.row[data-auth]'))
+      .filter(r => r.style.display !== 'none')
+      .map(r => { const el = r.querySelector('.email'); return el ? el.textContent.trim() : ''; })
+      .filter(e => e)
+      .join('\n');
+    navigator.clipboard.writeText(upns).then(() => {
+      const btn = document.getElementById('copyBtn');
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = orig, 2000);
+    });
+  }
+
+  function downloadCSV() {
+    const rows = Array.from(document.querySelectorAll('.row[data-auth]'))
+      .filter(r => r.style.display !== 'none')
+      .map(r => {
+        const name  = r.querySelector('.name')  ? r.querySelector('.name').textContent.trim()  : '';
+        const email = r.querySelector('.email') ? r.querySelector('.email').textContent.trim() : '';
+        return '"' + name.replace(/"/g, '""') + '",' + email;
+      });
+    const csv  = 'Name,UPN\n' + rows.join('\n');
+    const label = (activeFilter && filterLabels[activeFilter]) ? filterLabels[activeFilter].replace(/\s+/g, '-').toLowerCase() : 'export';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'mfamap-' + label + '.csv';
+    a.click();
   }
 </script>
 </body>
