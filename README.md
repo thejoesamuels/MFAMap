@@ -18,7 +18,8 @@ MFAMap generates a self-contained HTML dashboard showing authentication method r
 - 🧪 **Demo mode** — preview any report layout without connecting to Microsoft Graph
 - 🔑 **No app registration** — authenticates via `Connect-MgGraph` with your existing admin account
 - 🗂️ **Single output file** — fully self-contained HTML, shareable with no dependencies
-- 🔍 **Method filtering** — Mode 5 stat cards filter the table interactively
+- 🔍 **Risk filters** — Mode 5 includes SMS Only, Voice Only, and Legacy Only buttons that instantly show which users would be locked out if a legacy method were disabled
+- 📥 **CSV export** — export any filtered view as a Name + UPN CSV, ready to paste into an Entra group import
 - 🔌 **Auto-disconnect** — disconnects from Microsoft Graph automatically on completion
 
 ---
@@ -129,6 +130,8 @@ Binary — registered or not. Mode 3 shows a TOTP badge for software OATH tokens
 | **Modern Methods** | At least one of: Authenticator, WHfB, FIDO2, Software OATH |
 | **Legacy Only** | Only SMS, Voice, and/or Email OTP |
 | **No Methods** | Nothing registered |
+
+The report includes a **Risk filters** strip with three buttons — **SMS Only**, **Voice Only**, and **Legacy Only** — that filter the table down to users in that exact situation. When a filter is active, **Copy UPNs** and **Download CSV** appear in the filter bar so you can export the list straight into an Entra group import.
 
 ---
 
