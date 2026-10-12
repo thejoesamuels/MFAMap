@@ -87,7 +87,8 @@ The delta report shows who enrolled, who lapsed, progress bars comparing then vs
 
 | Parameter | Required | Description |
 |---|---|---|
-| `-GroupId` | Yes (unless `-Demo`) | Object ID of the target Entra group |
+| `-GroupId` | Yes (unless `-Demo` or `-AllUsers`) | Object ID of the target Entra group |
+| `-AllUsers` | No | Audit every enabled member user in the tenant instead of a single group (guests excluded). Cannot be combined with `-GroupId` |
 | `-Mode` | No | Pass `1`–`5` to skip the interactive mode prompt |
 | `-OutputPath` | No | Set output path directly and skip the save dialog |
 | `-Branded` | No | Produce a REDACTED branded report |
@@ -107,6 +108,10 @@ The delta report shows who enrolled, who lapsed, progress bars comparing then vs
 
 # REDACTED branded report
 .\code\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -Branded
+
+# Tenant-wide — every enabled member user, no group required (guests excluded)
+.\code\MFAMap.ps1 -AllUsers
+.\code\MFAMap.ps1 -AllUsers -Mode 5
 
 # Demo — preview without credentials
 .\code\MFAMap.ps1 -Demo -Mode 1

@@ -2,6 +2,14 @@
 
 ---
 
+## [2.4.0] — 2026-10-12
+
+### New features
+
+**Tenant-wide runs** — the new `-AllUsers` switch audits every enabled member user in the tenant instead of a single Entra group. Paginates through `/v1.0/users` directly (no group membership lookup), so there's no group size limit and nested groups are no longer a blind spot. Guest accounts are excluded by default, since their MFA typically lives in their home tenant. Mutually exclusive with `-GroupId`. Delta reports, CSV export, and risk filters all work the same way against a tenant-wide snapshot.
+
+---
+
 ## [2.3.0] — 2026-06-25
 
 ### New features

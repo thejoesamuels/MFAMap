@@ -12,6 +12,7 @@
 # Usage:
 #   .\MFAMap.ps1 -GroupId "your-group-object-id"
 #   .\MFAMap.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\report.html"
+#   .\MFAMap.ps1 -AllUsers
 #
 # Requirements:
 #   Install-Module Microsoft.Graph -Scope CurrentUser -Force
@@ -20,6 +21,9 @@
 param(
     [Parameter(Mandatory = $false)]
     [string]$GroupId = "",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$AllUsers,
 
     [Parameter(Mandatory = $false)]
     [string]$OutputPath = "",
@@ -32,12 +36,17 @@ param(
     [int]$Mode = 0
 )
 
-if (-not $Demo -and [string]::IsNullOrEmpty($GroupId)) {
-    Write-Host "  ERROR: -GroupId is required unless running with -Demo." -ForegroundColor Red
+if ($GroupId -and $AllUsers) {
+    Write-Host "  ERROR: -GroupId and -AllUsers cannot be used together." -ForegroundColor Red
     exit 1
 }
 
-$ScriptVersion = "2.3.0"
+if (-not $Demo -and -not $AllUsers -and [string]::IsNullOrEmpty($GroupId)) {
+    Write-Host "  ERROR: -GroupId is required unless running with -Demo or -AllUsers." -ForegroundColor Red
+    exit 1
+}
+
+$ScriptVersion = "2.4.0"
 
 # PS5 compatibility — $IsWindows/$IsMacOS don't exist in Windows PowerShell 5.1
 if ($null -eq (Get-Variable 'IsWindows' -ErrorAction SilentlyContinue)) {
@@ -124,14 +133,19 @@ try {
 }
 
 # ── Group name ────────────────────────────────────────────────────────────────
-Write-Host "  Fetching group details..." -ForegroundColor DarkGray
-try {
-    $groupResponse = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/groups/$GroupId`?`$select=displayName" -ErrorAction Stop
-    $groupName = $groupResponse.displayName
-    Write-Host "  Group: $groupName" -ForegroundColor Green
-} catch {
-    Write-Host "  WARNING: Could not retrieve group name." -ForegroundColor Yellow
-    $groupName = $GroupId
+if ($AllUsers) {
+    $groupName = "All Users"
+    Write-Host "  Scope: All Users (tenant-wide)" -ForegroundColor Green
+} else {
+    Write-Host "  Fetching group details..." -ForegroundColor DarkGray
+    try {
+        $groupResponse = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/groups/$GroupId`?`$select=displayName" -ErrorAction Stop
+        $groupName = $groupResponse.displayName
+        Write-Host "  Group: $groupName" -ForegroundColor Green
+    } catch {
+        Write-Host "  WARNING: Could not retrieve group name." -ForegroundColor Yellow
+        $groupName = $GroupId
+    }
 }
 
 } else {
@@ -214,29 +228,53 @@ Write-Host ""
 
 if (-not $Demo) {
 
-# ── Group members ─────────────────────────────────────────────────────────────
-Write-Host "  Fetching group members..." -ForegroundColor DarkGray
+# ── Members ────────────────────────────────────────────────────────────────────
 $skippedMembers = @()
-try {
-    $memberObjects = @(Get-MgGroupMember -GroupId $GroupId -All -ErrorAction Stop)
-
-    $members = foreach ($m in $memberObjects) {
-        try {
-            $response = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($m.Id)?`$select=id,displayName,userPrincipalName" -ErrorAction Stop
-            [PSCustomObject]@{
-                Id                = $response.id
-                DisplayName       = $response.displayName
-                UserPrincipalName = $response.userPrincipalName
+if ($AllUsers) {
+    Write-Host "  Fetching all enabled member users in the tenant..." -ForegroundColor DarkGray
+    try {
+        $members = @()
+        $uri = "https://graph.microsoft.com/v1.0/users?`$select=id,displayName,userPrincipalName&`$filter=accountEnabled eq true and userType eq 'Member'&`$top=999"
+        do {
+            $pageResponse = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop
+            $members += $pageResponse.value | ForEach-Object {
+                [PSCustomObject]@{
+                    Id                = $_.id
+                    DisplayName       = $_.displayName
+                    UserPrincipalName = $_.userPrincipalName
+                }
             }
-        } catch {
-            $skippedMembers += $m.Id
-        }
+            $uri = $pageResponse.'@odata.nextLink'
+        } while ($uri)
+        $members = @($members | Where-Object { $_ -ne $null })
+    } catch {
+        Write-Host "  ERROR: Could not retrieve tenant users." -ForegroundColor Red
+        Write-Host "  $_" -ForegroundColor Red
+        exit 1
     }
-    $members = @($members | Where-Object { $_ -ne $null })
-} catch {
-    Write-Host "  ERROR: Could not retrieve group members. Check the Group ID is correct." -ForegroundColor Red
-    Write-Host "  $_" -ForegroundColor Red
-    exit 1
+} else {
+    Write-Host "  Fetching group members..." -ForegroundColor DarkGray
+    try {
+        $memberObjects = @(Get-MgGroupMember -GroupId $GroupId -All -ErrorAction Stop)
+
+        $members = foreach ($m in $memberObjects) {
+            try {
+                $response = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($m.Id)?`$select=id,displayName,userPrincipalName" -ErrorAction Stop
+                [PSCustomObject]@{
+                    Id                = $response.id
+                    DisplayName       = $response.displayName
+                    UserPrincipalName = $response.userPrincipalName
+                }
+            } catch {
+                $skippedMembers += $m.Id
+            }
+        }
+        $members = @($members | Where-Object { $_ -ne $null })
+    } catch {
+        Write-Host "  ERROR: Could not retrieve group members. Check the Group ID is correct." -ForegroundColor Red
+        Write-Host "  $_" -ForegroundColor Red
+        exit 1
+    }
 }
 
 if ($skippedMembers.Count -gt 0) {
@@ -247,10 +285,14 @@ if ($skippedMembers.Count -gt 0) {
 
 $totalCount = $members.Count
 if ($totalCount -eq 0) {
-    Write-Host "  ERROR: No users found in this group. Check the Group ID." -ForegroundColor Red
+    if ($AllUsers) {
+        Write-Host "  ERROR: No enabled member users found in this tenant." -ForegroundColor Red
+    } else {
+        Write-Host "  ERROR: No users found in this group. Check the Group ID." -ForegroundColor Red
+    }
     exit 1
 }
-Write-Host "  Found $totalCount members." -ForegroundColor Green
+Write-Host "  Found $totalCount $(if ($AllUsers) { 'users' } else { 'members' })." -ForegroundColor Green
 Write-Host ""
 
 # ── Auth methods ──────────────────────────────────────────────────────────────
@@ -1119,6 +1161,7 @@ Write-Host ""
 if (-not $Demo) {
 
 # ── Snapshot & delta ──────────────────────────────────────────────────────────
+$scopeId   = if ($AllUsers) { "ALLUSERS" } else { $GroupId }
 $jsonPath  = $OutputPath -replace '\.html$', '.json'
 $deltaPath = $OutputPath -replace '\.html$', '_delta.html'
 $outputDir = Split-Path $OutputPath -Parent
@@ -1132,7 +1175,7 @@ try {
     foreach ($c in $candidates) {
         try {
             $data = Get-Content $c.FullName -Raw | ConvertFrom-Json
-            if ($data.groupId -eq $GroupId -and [int]$data.mode -eq $mode) {
+            if ($data.groupId -eq $scopeId -and [int]$data.mode -eq $mode) {
                 $prevSnapshot = $data
                 break
             }
@@ -1148,7 +1191,7 @@ $snapshot = [ordered]@{
     generatedAt = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss")
     tenantName  = $tenantName
     groupName   = $groupName
-    groupId     = $GroupId
+    groupId     = $scopeId
     mode        = $mode
     modeLabel   = $modeLabel
     users       = $snapshotUsers

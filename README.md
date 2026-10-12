@@ -42,7 +42,8 @@ Modes 2–4 are binary — registered or not. Mode 1 adds a **Partially Enrolled
 
 | Parameter | Required | Description |
 |---|---|---|
-| `-GroupId` | Yes (unless `-Demo`) | Object ID of the target Entra group |
+| `-GroupId` | Yes (unless `-Demo` or `-AllUsers`) | Object ID of the target Entra group |
+| `-AllUsers` | No | Audit every enabled member user in the tenant instead of a group (guests excluded). Cannot be combined with `-GroupId` |
 | `-Mode` | No | Skip the mode prompt — pass `1` through `5` |
 | `-OutputPath` | No | Override the output file path and skip the save dialog |
 | `-Branded` | No | Produce a REDACTED branded report |
@@ -91,6 +92,9 @@ In [entra.microsoft.com](https://entra.microsoft.com) → **Groups** → find yo
 
 # REDACTED branded report
 .\MFAMap.ps1 -GroupId "your-group-object-id" -Branded
+
+# Tenant-wide — every enabled member user, no group needed
+.\MFAMap.ps1 -AllUsers
 
 # Preview without credentials
 .\MFAMap.ps1 -Demo -Mode 1
