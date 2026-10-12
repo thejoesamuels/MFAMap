@@ -2,6 +2,14 @@
 
 ---
 
+## [2.5.0] — 2026-10-12
+
+### Changes
+
+**joelabs branding** — MFAMap is now a joelabs project. Reports and delta reports use the joelabs palette (grey `#26272A` ground, yellow `#FFC83D` accent) and the new MFAMap logo in the header, with a matching browser tab icon. The footer reads "MFAMap v2.5.0 · a joelabs project". The status colours are retuned to sit with the brand yellow (green `#7CD591`, amber `#E88B0E`, red `#F56A7E`, blue `#6DABDF`) and spaced further apart, including for colour-blind readers. The coverage colour now uses the brand yellow, and secondary text is a little brighter for legibility. The terminal splash is drawn in the brand yellow on terminals that support 24-bit colour (console yellow otherwise) and shows "a joelabs project" under the version. Brand assets live in `assets/brand/`.
+
+---
+
 ## [2.4.0] — 2026-10-12
 
 ### New features

@@ -46,7 +46,7 @@ if (-not $Demo -and -not $AllUsers -and [string]::IsNullOrEmpty($GroupId)) {
     exit 1
 }
 
-$ScriptVersion = "2.4.0"
+$ScriptVersion = "2.5.0"
 
 # PS5 compatibility — $IsWindows/$IsMacOS don't exist in Windows PowerShell 5.1
 if ($null -eq (Get-Variable 'IsWindows' -ErrorAction SilentlyContinue)) {
@@ -68,8 +68,13 @@ $splash = @'
 |_|  |_|_|/_/   \_\_|  |_|\__,_| .__/
                                |_|
 '@
-Write-Host $splash -ForegroundColor Yellow
-Write-Host "  v$ScriptVersion" -ForegroundColor DarkGray
+$esc = [char]27
+if ($Host.UI.SupportsVirtualTerminal) {
+    Write-Host "$esc[38;2;255;200;61m$splash$esc[0m"    # joelabs yellow #FFC83D
+} else {
+    Write-Host $splash -ForegroundColor Yellow
+}
+Write-Host "  v$ScriptVersion · a joelabs project" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Select tracking mode:" -ForegroundColor White
 Write-Host "  [1]  Authenticator App + Windows Hello for Business" -ForegroundColor Gray
@@ -523,18 +528,18 @@ Write-Host ""
 
 # ── Mode-specific accent colour ───────────────────────────────────────────────
 $accentColor = switch ($mode) {
-    1 { "#57BD84" }  # green
-    2 { "#57BD84" }  # green
-    3 { "#57BD84" }  # green
-    4 { "#57BD84" }  # green
-    5 { "#659AD2" }  # blue
+    1 { "#7CD591" }  # green
+    2 { "#7CD591" }  # green
+    3 { "#7CD591" }  # green
+    4 { "#7CD591" }  # green
+    5 { "#6DABDF" }  # blue
 }
 $accentDim = switch ($mode) {
-    1 { "rgba(87,189,132,0.12)" }
-    2 { "rgba(87,189,132,0.12)" }
-    3 { "rgba(87,189,132,0.12)" }
-    4 { "rgba(87,189,132,0.12)" }
-    5 { "rgba(101,154,210,0.12)" }
+    1 { "rgba(124,213,145,0.12)" }
+    2 { "rgba(124,213,145,0.12)" }
+    3 { "rgba(124,213,145,0.12)" }
+    4 { "rgba(124,213,145,0.12)" }
+    5 { "rgba(109,171,223,0.12)" }
 }
 
 # ── HTML helpers ──────────────────────────────────────────────────────────────
@@ -868,14 +873,18 @@ if ($mode -eq 5) {
 "@
 }
 
-$uiAccent    = "#F5CF18"
-$uiAccentDim = "rgba(245,207,24,0.12)"
-$bgNavy      = "#1A1A1A"
-$bgLight     = "#242424"
-$bgLighter   = "#2E2E2E"
-$logoHtml    = '<div class="logo">MFAMap</div>'
+# ── Brand (joelabs) ───────────────────────────────────────────────────────────
+# MFAMap is a joelabs project. Palette and logo come from the MFAMap brand pack (assets/brand):
+# grey #26272A ground, yellow #FFC83D accent. Keep both :root blocks in step with these.
+$uiAccent    = "#FFC83D"
+$uiAccentDim = "rgba(255,200,61,0.12)"
+$bgNavy      = "#26272A"
+$bgLight     = "#2F3034"
+$bgLighter   = "#3A3B40"
+$logoHtml    = '<div class="logo"><svg xmlns="http://www.w3.org/2000/svg" width="102" height="36" viewBox="0 0 102 36" role="img" aria-label="MFAMap"><g transform="translate(0.448 0)"><g transform="translate(-7.403 -2.691) scale(0.19154)"><ellipse cx="100" cy="186" rx="30" ry="7" fill="none" stroke="#FFC83D" stroke-width="7.836"/><ellipse cx="100" cy="186" rx="56" ry="12" fill="none" stroke="#FFC83D" stroke-width="7.836" opacity="0.5"/><g transform="translate(100 88) scale(0.88) translate(-100 -100)"><clipPath id="mc71"><path d="M100 194 C 74 158, 30 124, 30 82 C 30 43, 61 12, 100 12 C 139 12, 170 43, 170 82 C 170 124, 126 158, 100 194 Z"/></clipPath><g clip-path="url(#mc71)"><g fill="none" stroke-width="8.905" stroke-linecap="round"><path d="M86.83 103.58L-5.75 311.52" stroke="#FFC83D"/><path d="M11.997 319.424L15.949 310.55M22.534 295.759L75.216 177.433M81.801 162.642L117.362 82.772A19.429 19.429 0 0 0 116.082 63.099A19.429 19.429 0 0 0 98.285 54.647A19.429 19.429 0 0 0 82.251 66.098L59.203 117.865M52.617 132.656L-23.113 302.749" stroke="#FFC83D"/><path d="M27.528 326.339L67.698 236.115M74.283 221.324L132.892 89.687A36.429 36.429 0 0 0 133.279 88.817M136.417 73.069A36.429 36.429 0 0 0 107.118 38.274A36.429 36.429 0 0 0 66.721 59.183L23.917 155.323M17.331 170.114L-31.4 279.565M-37.985 294.356L-38.643 295.835" stroke="#FFC83D"/><path d="M43.058 333.253L116.154 169.076M122.74 154.285L148.422 96.601A53.429 53.429 0 0 0 143.595 43.111A53.429 53.429 0 0 0 94.731 20.832A53.429 53.429 0 0 0 51.191 52.269L-14.662 200.176M-21.247 214.967L-54.174 288.92" stroke="#FFC83D"/><path d="M58.588 340.168L60.564 335.73M67.149 320.94L108.636 227.758M115.221 212.967L163.952 103.516A70.429 70.429 0 0 0 149.433 23.835A70.429 70.429 0 0 0 69.55 10.494M55.88 19.104A70.429 70.429 0 0 0 35.66 45.354L-47.973 233.196M-54.558 247.987L-69.704 282.006" stroke="#FFC83D"/><path d="M74.118 347.082L103.094 282.003M109.679 267.212L179.483 110.43A87.429 87.429 0 0 0 179.361 37.317M171.25 23.332A87.429 87.429 0 0 0 91.303 -12.995A87.429 87.429 0 0 0 20.13 38.44L-14.772 116.83M-21.357 131.621L-79.966 263.259" stroke="#FFC83D"/><path d="M89.649 353.997L158.135 200.173M164.721 185.382L195.013 117.345A104.429 104.429 0 0 0 184.805 13.062A104.429 104.429 0 0 0 89.227 -29.871M73.316 -26.962A104.429 104.429 0 0 0 4.6 31.525L-56.643 169.079M-63.228 183.87L-100.764 268.177" stroke="#FFC83D"/><path d="M111.764 346.121L123.618 319.497M130.203 304.706L210.543 124.259A121.429 121.429 0 0 0 212.817 118.914M217.786 103.518A121.429 121.429 0 0 0 139.602 -40.789A121.429 121.429 0 0 0 -10.931 24.611L-55.052 123.708M-61.637 138.499L-116.295 261.262" stroke="#FFC83D"/><path d="M120.709 367.826L151.66 298.309M158.245 283.519L226.073 131.174A138.429 138.429 0 0 0 235.091 104.216M237.694 88.245A138.429 138.429 0 0 0 135.719 -59.741A138.429 138.429 0 0 0 -26.461 17.696L-86.387 152.292M-92.972 167.082L-128.532 246.952" stroke="#FFC83D"/><path d="M136.24 374.74L188.922 256.414M195.507 241.624L241.604 138.089A155.429 155.429 0 0 0 226.116 -16.844A155.429 155.429 0 0 0 84.069 -80.61A155.429 155.429 0 0 0 -41.991 10.782L-84.137 105.442M-90.722 120.233L-147.355 247.433" stroke="#FFC83D"/><path d="M156.379 371.301L180.086 318.055M186.672 303.264L257.134 145.003A172.429 172.429 0 0 0 174.965 -81.28M160.076 -87.625A172.429 172.429 0 0 0 -57.521 3.867L-134.569 176.919M-141.154 191.709L-162.885 240.519" stroke="#FFC83D"/><path d="M167.3 388.569L217.348 276.16M223.933 261.369L272.664 151.918A189.429 189.429 0 0 0 253.623 -36.829A189.429 189.429 0 0 0 80.515 -114.424A189.429 189.429 0 0 0 -73.052 -3.048L-132.319 130.069M-138.904 144.86L-178.416 233.604" stroke="#FFC83D"/><path d="M182.83 395.484L208.513 337.8M215.098 323.009L288.195 158.832A206.429 206.429 0 0 0 208.384 -101.686A206.429 206.429 0 0 0 -60.248 -56.128M-69.951 -43.172A206.429 206.429 0 0 0 -88.582 -9.962L-130.069 83.22M-136.654 98.01L-193.946 226.69" stroke="#FFC83D"/></g></g></g></g><path fill="#FFFFFF" transform="matrix(0.01800 0 0 -0.01800 29.52 24.30)" d="M69 0V700H230L444 263L656 700H817V0H682V470L497 98H390L204 470V0Z"/><path fill="#FFFFFF" transform="matrix(0.01800 0 0 -0.01800 44.84 24.30)" d="M69 0V700H525V591H204V404H461V298H204V0Z"/><path fill="#FFFFFF" transform="matrix(0.01800 0 0 -0.01800 52.85 24.30)" d="M22 0 278 700H431L686 0H543L488 159H219L164 0ZM452 264 354 546 256 264Z"/><path fill="#FFC83D" transform="matrix(0.01800 0 0 -0.01800 64.98 24.30)" d="M69 0V700H230L444 263L656 700H817V0H682V470L497 98H390L204 470V0Z"/><path fill="#FFC83D" transform="matrix(0.01800 0 0 -0.01800 80.30 24.30)" d="M236 -12Q173 -12 132 8.5Q91 29 71.5 63.5Q52 98 52 140Q52 186 75.5 221Q99 256 146.5 276Q194 296 266 296H391Q391 333 381 357.5Q371 382 350 394Q329 406 294 406Q256 406 229.5 389.5Q203 373 197 339H66Q71 393 101.5 432.5Q132 472 182.5 494Q233 516 295 516Q366 516 418 492Q470 468 498 423Q526 378 526 312V0H412L397 77Q386 57 371 41Q356 25 336 13Q316 1 291 -5.5Q266 -12 236 -12ZM268 92Q294 92 314.5 101.5Q335 111 350 127.5Q365 144 373.5 165.5Q382 187 385 212V213H282Q251 213 231.5 205.5Q212 198 203 184Q194 170 194 152Q194 132 203 119Q212 106 229 99Q246 92 268 92Z"/><path fill="#FFC83D" transform="matrix(0.01800 0 0 -0.01800 90.21 24.30)" d="M66 -220V504H186L201 434Q217 456 239 474.5Q261 493 291.5 504.5Q322 516 363 516Q434 516 488 481Q542 446 573.5 386.5Q605 327 605 251Q605 175 573 115.5Q541 56 487 22Q433 -12 364 -12Q308 -12 267.5 8.5Q227 29 201 65V-220ZM332 106Q372 106 402.5 124Q433 142 450 175Q467 208 467 251Q467 294 450 327.5Q433 361 402.5 379.5Q372 398 332 398Q293 398 262.5 379.5Q232 361 214.5 328Q197 295 197 252Q197 209 214.5 175.5Q232 142 262.5 124Q293 106 332 106Z"/></g></svg></div><div class="header-divider"></div>'
+$faviconHtml = '<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDMyIDMyIj48cmVjdCB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIGZpbGw9IiMyNjI3MkEiLz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgwLjUzNiAwLjA3Mikgc2NhbGUoMC4xNTQ2NCkiPjxwYXRoIGQ9Ik0xMDAgMTk0IEMgNzQgMTU4LCAzMCAxMjQsIDMwIDgyIEMgMzAgNDMsIDYxIDEyLCAxMDAgMTIgQyAxMzkgMTIsIDE3MCA0MywgMTcwIDgyIEMgMTcwIDEyNCwgMTI2IDE1OCwgMTAwIDE5NCBaIE02NiAxMjQgTDY2IDc4IEEzNCAzNCAwIDAgMSAxMzQgNzggTDEzNCAxMjQgQTEwIDEwIDAgMCAxIDExNCAxMjQgTDExNCA3OCBBMTQgMTQgMCAwIDAgODYgNzggTDg2IDEyNCBBMTAgMTAgMCAwIDEgNjYgMTI0IFoiIGZpbGw9IiNGRkM4M0QiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=">'
 $headerTitle = "Authentication Method Map"
-$footerText  = 'vibecoded by <span>JS</span> &#9889;'
+$footerText  = "MFAMap v$ScriptVersion &middot; a joelabs project &middot; vibecoded by <span>JS</span> &#9889;"
 $pageTitle   = "MFAMap &mdash; $safeGroupName"
 
 # ── Build HTML ────────────────────────────────────────────────────────────────
@@ -886,6 +895,7 @@ $html = @"
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>$pageTitle</title>
+$faviconHtml
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -894,17 +904,19 @@ $html = @"
     --navy: $bgNavy; --navy-light: $bgLight; --navy-lighter: $bgLighter;
     --accent: $accentColor; --accent-dim: $accentDim;
     --ui-accent: $uiAccent; --ui-accent-dim: $uiAccentDim;
-    --red: #E66558; --red-dim: rgba(230,101,88,0.12);
-    --amber: #FF8F52; --amber-dim: rgba(255,143,82,0.12);
-    --yellow: #EAD654; --yellow-dim: rgba(234,214,84,0.12);
-    --text: #FFFFFF; --text-muted: #9E9E9E; --text-dim: #606060;
+    --red: #F56A7E; --red-dim: rgba(245,106,126,0.12);
+    --amber: #E88B0E; --amber-dim: rgba(232,139,14,0.12);
+    --yellow: #FFC83D; --yellow-dim: rgba(255,200,61,0.12);
+    --text: #FFFFFF; --text-muted: #A9AAB0; --text-dim: #85868D;
     --border: rgba(255,255,255,0.06);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--navy); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
   .header { background: var(--navy-light); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
   .header-left { display: flex; align-items: center; gap: 14px; }
-  .logo { background: var(--ui-accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 6px 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: #1A1A1A; letter-spacing: -0.02em; }
+  .logo { display: flex; align-items: center; flex-shrink: 0; }
+  .logo svg { display: block; height: 36px; width: auto; }
+  .header-divider { width: 1px; height: 32px; background: rgba(255,255,255,0.12); flex-shrink: 0; }
   .header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
   .header-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   .header-right { display: flex; align-items: center; gap: 12px; }
@@ -1330,6 +1342,7 @@ $deltaHtml = @"
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>$pageTitle &mdash; Delta</title>
+$faviconHtml
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -1338,16 +1351,18 @@ $deltaHtml = @"
     --navy: $bgNavy; --navy-light: $bgLight; --navy-lighter: $bgLighter;
     --accent: $accentColor; --accent-dim: $accentDim;
     --ui-accent: $uiAccent; --ui-accent-dim: $uiAccentDim;
-    --red: #E66558; --red-dim: rgba(230,101,88,0.12);
-    --amber: #FF8F52; --amber-dim: rgba(255,143,82,0.12);
-    --text: #FFFFFF; --text-muted: #9E9E9E; --text-dim: #606060;
+    --red: #F56A7E; --red-dim: rgba(245,106,126,0.12);
+    --amber: #E88B0E; --amber-dim: rgba(232,139,14,0.12);
+    --text: #FFFFFF; --text-muted: #A9AAB0; --text-dim: #85868D;
     --border: rgba(255,255,255,0.06);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--navy); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
   .header { background: var(--navy-light); border-bottom: 1px solid var(--border); padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; }
   .header-left { display: flex; align-items: center; gap: 14px; }
-  .logo { background: var(--ui-accent); border-radius: 8px; padding: 6px 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: #1A1A1A; letter-spacing: -0.02em; }
+  .logo { display: flex; align-items: center; flex-shrink: 0; }
+  .logo svg { display: block; height: 36px; width: auto; }
+  .header-divider { width: 1px; height: 32px; background: rgba(255,255,255,0.12); flex-shrink: 0; }
   .header-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
   .header-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
   .header-right { display: flex; align-items: center; gap: 12px; }

@@ -1,10 +1,15 @@
-# ⚡ MFAMap
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/readme-banner-dark.png">
+    <img src="assets/brand/readme-banner-light.png" alt="MFAMap, a joelabs project" width="880">
+  </picture>
+</h1>
 
 **Authentication method mapper for Microsoft Entra ID**
 
 MFAMap generates a self-contained HTML dashboard showing authentication method registration across a target Entra group. Run the script, pick a mode, save the file. Open it in any browser, share it with anyone — no server, no login, no dependencies.
 
-<img src="images/dashboard.png" alt="MFAMap dashboard preview" width="600">
+<img src="images/dashboard.png" alt="MFAMap full method audit report (demo data)" width="600">
 
 ---
 
@@ -183,5 +188,7 @@ All read-only. MFAMap cannot make any changes.
 ---
 
 ## 👏 Credits
+
+MFAMap is a joelabs project. Logo, colours and usage rules are in [`assets/brand`](assets/brand/README.md).
 
 vibecoded by JS ⚡
