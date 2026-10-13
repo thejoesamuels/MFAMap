@@ -5,6 +5,10 @@ code/mfamap_*.html
 # Claude Code project files
 .claude/
 code/.claude/
+CLAUDE.md
+
+# Editor workspace
+*.code-workspace
 
 # macOS
 .DS_Store
