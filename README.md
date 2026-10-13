@@ -9,7 +9,7 @@
 
 MFAMap generates a self-contained HTML dashboard showing authentication method registration across a target Entra group. Run the script, pick a mode, save the file. Open it in any browser, share it with anyone — no server, no login, no dependencies.
 
-<img src="images/dashboard.png" alt="MFAMap full method audit report (demo data)" width="600">
+<img src="images/dashboard.png" alt="MFAMap full method audit report" width="600">
 
 ---
 
