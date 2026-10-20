@@ -50,7 +50,7 @@ if (-not $Demo -and -not $AllUsers -and [string]::IsNullOrEmpty($GroupId)) {
     exit 1
 }
 
-$ScriptVersion = "2.6.0"
+$ScriptVersion = "2.6.1"
 
 # PS5 compatibility — $IsWindows/$IsMacOS don't exist in Windows PowerShell 5.1
 if ($null -eq (Get-Variable 'IsWindows' -ErrorAction SilentlyContinue)) {
@@ -234,6 +234,8 @@ if ($OutputPath -eq "") {
         $OutputPath = ".\$suggestedName"
     }
 }
+# The snapshot and delta paths are derived from the .html name, so without it they would overwrite the report
+if ($OutputPath -notmatch '\.html$') { $OutputPath += ".html" }
 Write-Host ""
 
 if (-not $Demo) {
