@@ -13,6 +13,7 @@
 #   .\MFAMap.ps1 -GroupId "your-group-object-id"
 #   .\MFAMap.ps1 -GroupId "your-group-object-id" -OutputPath "C:\Reports\report.html"
 #   .\MFAMap.ps1 -AllUsers
+#   .\MFAMap.ps1 -AllUsers -LicensedOnly
 #
 # Requirements:
 #   Install-Module Microsoft.Graph -Scope CurrentUser -Force
@@ -24,6 +25,9 @@ param(
 
     [Parameter(Mandatory = $false)]
     [switch]$AllUsers,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$LicensedOnly,
 
     [Parameter(Mandatory = $false)]
     [string]$OutputPath = "",
@@ -46,7 +50,7 @@ if (-not $Demo -and -not $AllUsers -and [string]::IsNullOrEmpty($GroupId)) {
     exit 1
 }
 
-$ScriptVersion = "2.5.0"
+$ScriptVersion = "2.6.0"
 
 # PS5 compatibility — $IsWindows/$IsMacOS don't exist in Windows PowerShell 5.1
 if ($null -eq (Get-Variable 'IsWindows' -ErrorAction SilentlyContinue)) {
@@ -139,8 +143,8 @@ try {
 
 # ── Group name ────────────────────────────────────────────────────────────────
 if ($AllUsers) {
-    $groupName = "All Users"
-    Write-Host "  Scope: All Users (tenant-wide)" -ForegroundColor Green
+    $groupName = if ($LicensedOnly) { "All Licensed Users" } else { "All Users" }
+    Write-Host "  Scope: $groupName (tenant-wide)" -ForegroundColor Green
 } else {
     Write-Host "  Fetching group details..." -ForegroundColor DarkGray
     try {
@@ -151,6 +155,7 @@ if ($AllUsers) {
         Write-Host "  WARNING: Could not retrieve group name." -ForegroundColor Yellow
         $groupName = $GroupId
     }
+    if ($LicensedOnly) { $groupName += " (licensed only)" }
 }
 
 } else {
@@ -239,7 +244,7 @@ if ($AllUsers) {
     Write-Host "  Fetching all enabled member users in the tenant..." -ForegroundColor DarkGray
     try {
         $members = @()
-        $uri = "https://graph.microsoft.com/v1.0/users?`$select=id,displayName,userPrincipalName&`$filter=accountEnabled eq true and userType eq 'Member'&`$top=999"
+        $uri = "https://graph.microsoft.com/v1.0/users?`$select=id,displayName,userPrincipalName,assignedLicenses&`$filter=accountEnabled eq true and userType eq 'Member'&`$top=999"
         do {
             $pageResponse = Invoke-MgGraphRequest -Method GET -Uri $uri -ErrorAction Stop
             $members += $pageResponse.value | ForEach-Object {
@@ -247,6 +252,7 @@ if ($AllUsers) {
                     Id                = $_.id
                     DisplayName       = $_.displayName
                     UserPrincipalName = $_.userPrincipalName
+                    IsLicensed        = @($_.assignedLicenses).Count -gt 0
                 }
             }
             $uri = $pageResponse.'@odata.nextLink'
@@ -264,11 +270,12 @@ if ($AllUsers) {
 
         $members = foreach ($m in $memberObjects) {
             try {
-                $response = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($m.Id)?`$select=id,displayName,userPrincipalName" -ErrorAction Stop
+                $response = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($m.Id)?`$select=id,displayName,userPrincipalName,assignedLicenses" -ErrorAction Stop
                 [PSCustomObject]@{
                     Id                = $response.id
                     DisplayName       = $response.displayName
                     UserPrincipalName = $response.userPrincipalName
+                    IsLicensed        = @($response.assignedLicenses).Count -gt 0
                 }
             } catch {
                 $skippedMembers += $m.Id
@@ -288,12 +295,20 @@ if ($skippedMembers.Count -gt 0) {
     Write-Host ""
 }
 
+if ($LicensedOnly) {
+    $unlicensedCount = @($members | Where-Object { -not $_.IsLicensed }).Count
+    $members = @($members | Where-Object { $_.IsLicensed })
+    if ($unlicensedCount -gt 0) {
+        Write-Host "  Excluding $unlicensedCount unlicensed account(s) (-LicensedOnly)." -ForegroundColor DarkGray
+    }
+}
+
 $totalCount = $members.Count
 if ($totalCount -eq 0) {
     if ($AllUsers) {
-        Write-Host "  ERROR: No enabled member users found in this tenant." -ForegroundColor Red
+        Write-Host "  ERROR: No enabled $(if ($LicensedOnly) { 'licensed ' })member users found in this tenant." -ForegroundColor Red
     } else {
-        Write-Host "  ERROR: No users found in this group. Check the Group ID." -ForegroundColor Red
+        Write-Host "  ERROR: No $(if ($LicensedOnly) { 'licensed ' })users found in this group. Check the Group ID." -ForegroundColor Red
     }
     exit 1
 }
@@ -410,6 +425,7 @@ foreach ($member in $members) {
         $users += [PSCustomObject]@{
             Name             = $member.DisplayName
             Email            = $member.UserPrincipalName
+            IsLicensed       = $member.IsLicensed
             HasAuthenticator = $hasAuthenticator
             HasWHfB          = $hasWHfB
             HasPasskey       = $hasPasskey
@@ -462,9 +478,10 @@ $users = @(
     # No methods registered
     [PSCustomObject]@{ Name="Olivia Price";   Email="olivia.price@demo.internal";   HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  },
     [PSCustomObject]@{ Name="Patrick Quinn";  Email="patrick.quinn@demo.internal";  HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  },
-    [PSCustomObject]@{ Name="Rachel Smith";   Email="rachel.smith@demo.internal";   HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  },
-    [PSCustomObject]@{ Name="Sam Taylor";     Email="sam.taylor@demo.internal";     HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true  }
+    [PSCustomObject]@{ Name="Rachel Smith";   Email="rachel.smith@demo.internal";   HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true; IsLicensed=$false  },
+    [PSCustomObject]@{ Name="Sam Taylor";     Email="sam.taylor@demo.internal";     HasAuthenticator=$false; HasWHfB=$false; HasPasskey=$false; IsTotpOnly=$false; HasFido2=$false; HasSoftwareOath=$false; HasSms=$false; HasVoice=$false; HasEmail=$false; IsLegacyOnly=$false; NoMethods=$true; IsLicensed=$false  }
 )
+if ($LicensedOnly) { $users = @($users | Where-Object { $_.IsLicensed -ne $false }) }
 $errorUsers     = @()
 $skippedMembers = @()
 Write-Host "  Loaded $($users.Count) demo users." -ForegroundColor Green
@@ -615,6 +632,7 @@ function Get-Rows($userList, [string]$statusType, [int]$m) {
         }
         $safeName  = [System.Web.HttpUtility]::HtmlEncode($u.Name)
         $safeEmail = [System.Web.HttpUtility]::HtmlEncode($u.Email)
+        $licenseTag = if ($u.IsLicensed -eq $false) { '<span class="tag-unlicensed" title="No licence assigned. If this account doesn''t need to sign in (e.g. a shared mailbox), consider blocking sign-in.">Unlicensed</span>' } else { '' }
         $dataAttrs = ""
         if ($m -eq 5) {
             $da = if ($u.HasAuthenticator) { 1 } else { 0 }
@@ -630,7 +648,7 @@ function Get-Rows($userList, [string]$statusType, [int]$m) {
         }
         $rows += @"
         <div class="row"$dataAttrs>
-          <div class="cell"><span class="name">$safeName</span><span class="email">$safeEmail</span></div>
+          <div class="cell"><div class="name-line"><span class="name">$safeName</span>$licenseTag</div><span class="email">$safeEmail</span></div>
           $methodCells
           <div>$pill</div>
         </div>
@@ -963,6 +981,9 @@ $faviconHtml
   .row:hover { background: rgba(255,255,255,0.02); }
   .cell { display: flex; flex-direction: column; justify-content: center; }
   .name { font-size: 14px; font-weight: 500; }
+  .name-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .name-line .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tag-unlicensed { flex-shrink: 0; font-size: 10px; font-weight: 500; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--text-muted); cursor: help; }
   .email { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
   .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 3px 9px; border-radius: 6px; width: fit-content; }
   .badge.yes { background: var(--accent-dim); color: var(--accent); }
@@ -1173,7 +1194,9 @@ Write-Host ""
 if (-not $Demo) {
 
 # ── Snapshot & delta ──────────────────────────────────────────────────────────
+# Licensed-only runs get their own scope so they never delta against a full run
 $scopeId   = if ($AllUsers) { "ALLUSERS" } else { $GroupId }
+if ($LicensedOnly) { $scopeId += ":LICENSED" }
 $jsonPath  = $OutputPath -replace '\.html$', '.json'
 $deltaPath = $OutputPath -replace '\.html$', '_delta.html'
 $outputDir = Split-Path $OutputPath -Parent
@@ -1197,7 +1220,7 @@ try {
 
 # Write current JSON sidecar
 $snapshotUsers = $users | ForEach-Object {
-    [PSCustomObject]@{ name = $_.Name; email = $_.Email; status = (Get-UserStatus $_ $mode) }
+    [PSCustomObject]@{ name = $_.Name; email = $_.Email; status = (Get-UserStatus $_ $mode); licensed = $_.IsLicensed }
 }
 $snapshot = [ordered]@{
     generatedAt = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss")
@@ -1217,7 +1240,12 @@ try {
 
 # Delta report
 if ($prevSnapshot) {
-    $prevDate    = try { [datetime]::Parse($prevSnapshot.generatedAt).ToString("d MMM yyyy") } catch { "previous run" }
+    # PowerShell 7's ConvertFrom-Json already returns a DateTime; Windows PowerShell 5.1 returns the raw string
+    $prevDate    = try {
+        $prevGen = $prevSnapshot.generatedAt
+        $prevDt  = if ($prevGen -is [datetime]) { $prevGen } else { [datetime]::Parse([string]$prevGen, [System.Globalization.CultureInfo]::InvariantCulture) }
+        $prevDt.ToString("d MMM yyyy")
+    } catch { "previous run" }
     $safePrevDate = [System.Web.HttpUtility]::HtmlEncode($prevDate)
     Write-Host "  Comparing against snapshot from $prevDate..." -ForegroundColor DarkGray
 
@@ -1255,9 +1283,12 @@ if ($prevSnapshot) {
     }
 
     $prevTotal    = $prevSnapshot.users.Count
-    $prevComplete = ($prevSnapshot.users | Where-Object { $_.status -in @("complete","modern") }).Count
+    $prevComplete = @($prevSnapshot.users | Where-Object { $_.status -in @("complete","modern") }).Count
     $prevPct      = if ($prevTotal -gt 0) { [math]::Round(($prevComplete / $prevTotal) * 100, 1) } else { 0 }
-    $currPct      = $pctComplete
+    # Count the current run the same way as the previous one, so Mode 5 (modern methods) is measured too
+    $currTotal    = $snapshotUsers.Count
+    $currComplete = @($snapshotUsers | Where-Object { $_.status -in @("complete","modern") }).Count
+    $currPct      = if ($currTotal -gt 0) { [math]::Round(($currComplete / $currTotal) * 100, 1) } else { 0 }
 
     $dNewlyComplete = $deltaNewlyComplete.Count
     $dNewlyLapsed   = $deltaNewlyLapsed.Count
@@ -1282,6 +1313,10 @@ if ($prevSnapshot) {
         if ($st -in @("partial","legacy"))  { return "partial" }
         return "none"
     }
+    function Get-LicenseTag($licensed) {
+        if ($licensed -eq $false) { return '<span class="tag-unlicensed" title="No licence assigned">Unlicensed</span>' }
+        return ''
+    }
     function Get-DeltaRows($entries, [int]$m, [bool]$showArrow) {
         if ($entries.Count -eq 0) { return '<div class="empty">None</div>' }
         $out = ""
@@ -1296,7 +1331,8 @@ if ($prevSnapshot) {
                 $pl = Get-StatusLabel $e.PrevStatus $m
                 $status = "<span class=`"arrow`"><span class=`"pill $pc`">$pl</span> &rarr; $currPillHtml</span>"
             } else { $status = $currPillHtml }
-            $out += "<div class=`"delta-row`"><div class=`"cell`"><span class=`"name`">$n</span><span class=`"email`">$em</span></div><div>$status</div></div>"
+            $lt = Get-LicenseTag $e.User.IsLicensed
+            $out += "<div class=`"delta-row`"><div class=`"cell`"><div class=`"name-line`"><span class=`"name`">$n</span>$lt</div><span class=`"email`">$em</span></div><div>$status</div></div>"
         }
         return $out
     }
@@ -1308,7 +1344,8 @@ if ($prevSnapshot) {
             $em = [System.Web.HttpUtility]::HtmlEncode($e.email)
             $pc = Get-StatusPillClass $e.status
             $pl = Get-StatusLabel $e.status $mode
-            $out += "<div class=`"delta-row`"><div class=`"cell`"><span class=`"name`">$n</span><span class=`"email`">$em</span></div><div><span class=`"pill $pc`">$pl</span></div></div>"
+            $lt = Get-LicenseTag $e.licensed
+            $out += "<div class=`"delta-row`"><div class=`"cell`"><div class=`"name-line`"><span class=`"name`">$n</span>$lt</div><span class=`"email`">$em</span></div><div><span class=`"pill $pc`">$pl</span></div></div>"
         }
         return $out
     }
@@ -1411,6 +1448,8 @@ $faviconHtml
   .delta-row:hover { background: rgba(255,255,255,0.02); }
   .cell { display: flex; flex-direction: column; }
   .name { font-size: 14px; font-weight: 500; }
+  .name-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .tag-unlicensed { flex-shrink: 0; font-size: 10px; font-weight: 500; letter-spacing: 0.02em; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--text-muted); }
   .email { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
   .arrow { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 13px; }
   .pill { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 99px; display: inline-block; }

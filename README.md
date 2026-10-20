@@ -23,6 +23,7 @@ MFAMap generates a self-contained HTML dashboard showing authentication method r
 - 🧪 **Demo mode** — preview any report layout without connecting to Microsoft Graph
 - 🔑 **No app registration** — authenticates via `Connect-MgGraph` with your existing admin account
 - 🗂️ **Single output file** — fully self-contained HTML, shareable with no dependencies
+- 🪪 **Licence awareness** — accounts with no licence assigned are tagged **Unlicensed** in reports and delta reports, so shared mailboxes, service accounts and leavers that can still sign in stand out. Add `-LicensedOnly` to leave them out
 - 🔍 **Risk filters** — Mode 5 includes SMS Only, Voice Only, and Legacy Only buttons that instantly show which users would be locked out if a legacy method were disabled
 - 📥 **CSV export** — export any filtered view as a Name + UPN CSV, ready to paste into an Entra group import
 - 🔌 **Auto-disconnect** — disconnects from Microsoft Graph automatically on completion
@@ -49,6 +50,7 @@ Modes 2–4 are binary — registered or not. Mode 1 adds a **Partially Enrolled
 |---|---|---|
 | `-GroupId` | Yes (unless `-Demo` or `-AllUsers`) | Object ID of the target Entra group |
 | `-AllUsers` | No | Audit every enabled member user in the tenant instead of a group (guests excluded). Cannot be combined with `-GroupId` |
+| `-LicensedOnly` | No | Only include users with at least one licence assigned. Works with `-AllUsers` or `-GroupId`. Unlicensed accounts are included by default and tagged **Unlicensed** in the report |
 | `-Mode` | No | Skip the mode prompt — pass `1` through `5` |
 | `-OutputPath` | No | Override the output file path and skip the save dialog |
 | `-Branded` | No | Produce a REDACTED branded report |
@@ -100,6 +102,9 @@ In [entra.microsoft.com](https://entra.microsoft.com) → **Groups** → find yo
 
 # Tenant-wide — every enabled member user, no group needed
 .\MFAMap.ps1 -AllUsers
+
+# Tenant-wide, licensed users only
+.\MFAMap.ps1 -AllUsers -LicensedOnly
 
 # Preview without credentials
 .\MFAMap.ps1 -Demo -Mode 1
@@ -153,7 +158,7 @@ MFAMap uses delegated permissions — it authenticates as you. No app registrati
 | `Organization.Read.All` | Tenant display name |
 | `Group.Read.All` | Group display name |
 | `GroupMember.Read.All` | Group membership |
-| `User.Read.All` | Resolve member display names and UPNs |
+| `User.Read.All` | Resolve member display names, UPNs and licence status |
 | `UserAuthenticationMethod.Read.All` | MFA registration status |
 
 All read-only. MFAMap cannot make any changes.

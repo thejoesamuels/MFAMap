@@ -2,6 +2,22 @@
 
 ---
 
+## [2.6.0] — 2026-10-20
+
+### New features
+
+**Unlicensed tag** — users with no licence assigned are now tagged **Unlicensed** next to their name in the report and in the delta report. Hover over the tag for a reminder that accounts which don't need to sign in, such as shared mailboxes, should have sign-in blocked. Licence status comes from `assignedLicenses` in the same Graph request that already fetches each user, so there are no extra calls and no new permissions. It includes group-based licensing. Unlicensed accounts are still included by default, because an enabled account can sign in whether or not it is licensed. Snapshots now record each user's licence status, so the delta report can tag users who have left too. Snapshots from earlier versions still load; their entries just aren't tagged.
+
+**`-LicensedOnly` switch** — limits a run to users with at least one licence. Works with `-AllUsers` (shown as "All Licensed Users") and with `-GroupId` (the group name gets "(licensed only)" added). Unlicensed accounts are dropped before their authentication methods are checked, and the console reports how many were excluded. Licensed-only runs keep their own snapshot history, so a delta never compares a licensed-only run with a full one.
+
+### Fixes
+
+**Delta report progress in Mode 5** — the "Now" bar always showed 0% in Full Method Audit delta reports. The current run is now measured the same way as the previous snapshot, so Mode 5 shows the share of users with modern methods. Modes 1–4 are unchanged.
+
+**Delta report date on PowerShell 7** — the delta header could show "since previous run" instead of the date of the earlier snapshot. This happened on PowerShell 7 with non-US regional settings, such as en-GB. The date is now read correctly on both PowerShell 7 and Windows PowerShell 5.1.
+
+---
+
 ## [2.5.0] — 2026-10-12
 
 ### Changes
