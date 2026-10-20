@@ -2,6 +2,22 @@
 
 ---
 
+## [2.6.1] — 2026-10-20
+
+### Fixes
+
+**`-OutputPath` without `.html`** — if `-OutputPath` didn't end in `.html` (for example `-OutputPath C:\Reports\report`), the JSON snapshot and the delta report were written to the same path and overwrote the HTML report. `.html` is now added when it's missing.
+
+### Docs
+
+**Flag explainers** — the README now has a short explainer and an example for each flag under **What each flag does**.
+
+**Removed `-Branded`** — the README and SETUP guide still listed a `-Branded` flag. It isn't part of the public release, and passing it stopped the script with a "parameter cannot be found" error.
+
+**Report file names** — the folder-structure examples now match the names the script actually writes, such as `mfamap_AllStaff_Mode1-Auth-WHfB_2026-06-01_0900.html`.
+
+---
+
 ## [2.6.0] — 2026-10-20
 
 ### New features

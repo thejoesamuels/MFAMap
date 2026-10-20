@@ -7,7 +7,7 @@
 
 **Authentication method mapper for Microsoft Entra ID**
 
-MFAMap generates a self-contained HTML dashboard showing authentication method registration across a target Entra group. Run the script, pick a mode, save the file. Open it in any browser, share it with anyone — no server, no login, no dependencies.
+MFAMap generates a self-contained HTML dashboard showing authentication method registration for an Entra group or your whole tenant. Run the script, pick a mode, save the file. Open it in any browser, share it with anyone — no server, no login, no dependencies.
 
 <img src="images/dashboard.png" alt="MFAMap full method audit report" width="600">
 
@@ -19,7 +19,6 @@ MFAMap generates a self-contained HTML dashboard showing authentication method r
 - 📊 **Delta reports** — run monthly and MFAMap auto-generates a comparison report showing who enrolled, who lapsed, and progress over time
 - 💾 **Native save dialog** — file picker on Windows and macOS; falls back to auto-naming
 - 📄 **PDF export** — Save as PDF button in every report; dark theme preserved in output
-- 🏷️ **Branded reports** — `-Branded` flag produces a REDACTED branded version for client use
 - 🧪 **Demo mode** — preview any report layout without connecting to Microsoft Graph
 - 🔑 **No app registration** — authenticates via `Connect-MgGraph` with your existing admin account
 - 🗂️ **Single output file** — fully self-contained HTML, shareable with no dependencies
@@ -52,9 +51,46 @@ Modes 2–4 are binary — registered or not. Mode 1 adds a **Partially Enrolled
 | `-AllUsers` | No | Audit every enabled member user in the tenant instead of a group (guests excluded). Cannot be combined with `-GroupId` |
 | `-LicensedOnly` | No | Only include users with at least one licence assigned. Works with `-AllUsers` or `-GroupId`. Unlicensed accounts are included by default and tagged **Unlicensed** in the report |
 | `-Mode` | No | Skip the mode prompt — pass `1` through `5` |
-| `-OutputPath` | No | Override the output file path and skip the save dialog |
-| `-Branded` | No | Produce a REDACTED branded report |
+| `-OutputPath` | No | Override the output file path and skip the save dialog. `.html` is added if missing |
 | `-Demo` | No | Run without a Graph connection using synthetic data |
+
+### What each flag does
+
+**`-GroupId`** — audits the members of one Entra group. Paste the group's Object ID from [entra.microsoft.com](https://entra.microsoft.com) → **Groups** → your group → **Overview**. Only direct members are included, not members of nested groups. Use it to track a rollout to a particular team or pilot group.
+
+```powershell
+.\MFAMap.ps1 -GroupId "your-group-object-id"
+```
+
+**`-AllUsers`** — audits every enabled member account in the tenant, with no group needed. Guests are left out, because their MFA usually lives in their home tenant, and so are disabled accounts. Unlicensed accounts are included and tagged **Unlicensed** (see `-LicensedOnly`). Use it for a full tenant health check. It can't be combined with `-GroupId`.
+
+```powershell
+.\MFAMap.ps1 -AllUsers
+```
+
+**`-LicensedOnly`** — leaves out accounts with no licence assigned. Add it to `-AllUsers` or `-GroupId`. Without it, unlicensed accounts stay in the report with an **Unlicensed** tag. That's the default because an enabled account can still sign in without a licence, and shared mailboxes or old service accounts left like that are worth catching. Licensed-only runs keep their own delta history, separate from full runs.
+
+```powershell
+.\MFAMap.ps1 -AllUsers -LicensedOnly
+```
+
+**`-Mode`** — chooses what to check, `1` to `5` (see **Tracking modes** above), so the script doesn't ask. Handy for repeat runs where you always use the same mode.
+
+```powershell
+.\MFAMap.ps1 -AllUsers -Mode 5
+```
+
+**`-OutputPath`** — saves the report to this file and skips the save dialog. The JSON snapshot (`.json`) and any delta report (`_delta.html`) are written next to it under the same name. `.html` is added if you leave it off. Save repeat runs to the same folder so delta reports work.
+
+```powershell
+.\MFAMap.ps1 -AllUsers -OutputPath "C:\Reports\Contoso\mfamap.html"
+```
+
+**`-Demo`** — builds a report from made-up users without signing in to Microsoft Graph. Use it to preview a mode's layout or show someone what the report looks like. Demo runs don't write snapshots or delta reports.
+
+```powershell
+.\MFAMap.ps1 -Demo -Mode 5
+```
 
 ---
 
@@ -65,11 +101,11 @@ Keep a folder per client or per group. MFAMap writes a JSON snapshot alongside e
 ```
 Reports/
   Contoso/
-    mfamap_AllStaff_Mode1_2026-05-01_0900.html
-    mfamap_AllStaff_Mode1_2026-05-01_0900.json
-    mfamap_AllStaff_Mode1_2026-06-01_0900.html       ← compared vs May automatically
-    mfamap_AllStaff_Mode1_2026-06-01_0900.json
-    mfamap_AllStaff_Mode1_2026-06-01_0900_delta.html ← progress since May
+    mfamap_AllStaff_Mode1-Auth-WHfB_2026-05-01_0900.html
+    mfamap_AllStaff_Mode1-Auth-WHfB_2026-05-01_0900.json
+    mfamap_AllStaff_Mode1-Auth-WHfB_2026-06-01_0900.html       ← compared vs May automatically
+    mfamap_AllStaff_Mode1-Auth-WHfB_2026-06-01_0900.json
+    mfamap_AllStaff_Mode1-Auth-WHfB_2026-06-01_0900_delta.html ← progress since May
   FabrikamLtd/
     ...
 ```
@@ -86,7 +122,7 @@ Install-Module Microsoft.Graph -Scope CurrentUser -Force
 
 **2. Get your group's Object ID**
 
-In [entra.microsoft.com](https://entra.microsoft.com) → **Groups** → find your group → copy the **Object ID** from the Overview page.
+In [entra.microsoft.com](https://entra.microsoft.com) → **Groups** → find your group → copy the **Object ID** from the Overview page. Skip this step if you're auditing the whole tenant with `-AllUsers`.
 
 **3. Run the script**
 
@@ -97,9 +133,6 @@ In [entra.microsoft.com](https://entra.microsoft.com) → **Groups** → find yo
 # Skip the mode prompt
 .\MFAMap.ps1 -GroupId "your-group-object-id" -Mode 1
 
-# REDACTED branded report
-.\MFAMap.ps1 -GroupId "your-group-object-id" -Branded
-
 # Tenant-wide — every enabled member user, no group needed
 .\MFAMap.ps1 -AllUsers
 
@@ -108,7 +141,7 @@ In [entra.microsoft.com](https://entra.microsoft.com) → **Groups** → find yo
 
 # Preview without credentials
 .\MFAMap.ps1 -Demo -Mode 1
-.\MFAMap.ps1 -Demo -Mode 5 -Branded
+.\MFAMap.ps1 -Demo -Mode 5
 ```
 
 **4. Open the report**

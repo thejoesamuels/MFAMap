@@ -70,11 +70,11 @@ Keep a folder per client or per group. MFAMap writes a JSON snapshot alongside e
 ```
 Reports/
   Contoso/
-    mfamap_AllStaff_Mode1_2026-05-01.html
-    mfamap_AllStaff_Mode1_2026-05-01.json
-    mfamap_AllStaff_Mode1_2026-06-01.html        ← standard report
-    mfamap_AllStaff_Mode1_2026-06-01.json        ← snapshot for next time
-    mfamap_AllStaff_Mode1_2026-06-01_delta.html  ← auto-generated comparison vs May
+    mfamap_AllStaff_Mode1-Auth-WHfB_2026-05-01_0900.html
+    mfamap_AllStaff_Mode1-Auth-WHfB_2026-05-01_0900.json
+    mfamap_AllStaff_Mode1-Auth-WHfB_2026-06-01_0900.html        ← standard report
+    mfamap_AllStaff_Mode1-Auth-WHfB_2026-06-01_0900.json        ← snapshot for next time
+    mfamap_AllStaff_Mode1-Auth-WHfB_2026-06-01_0900_delta.html  ← auto-generated comparison vs May
   FabrikamLtd/
     ...
 ```
@@ -97,8 +97,7 @@ Any user with no licence assigned is tagged **Unlicensed** next to their name, i
 | `-AllUsers` | No | Audit every enabled member user in the tenant instead of a single group (guests excluded). Cannot be combined with `-GroupId` |
 | `-LicensedOnly` | No | Only include users with at least one licence assigned. Works with `-AllUsers` or `-GroupId`. Without it, unlicensed accounts are included and tagged **Unlicensed** |
 | `-Mode` | No | Pass `1`–`5` to skip the interactive mode prompt |
-| `-OutputPath` | No | Set output path directly and skip the save dialog |
-| `-Branded` | No | Produce a REDACTED branded report |
+| `-OutputPath` | No | Set output path directly and skip the save dialog. `.html` is added if missing |
 | `-Demo` | No | Run without connecting to Graph — uses synthetic data |
 
 **Examples:**
@@ -113,9 +112,6 @@ Any user with no licence assigned is tagged **Unlicensed** next to their name, i
 # Custom output path
 .\code\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -OutputPath "C:\Reports\Contoso\report.html"
 
-# REDACTED branded report
-.\code\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -Branded
-
 # Tenant-wide — every enabled member user, no group required (guests excluded)
 .\code\MFAMap.ps1 -AllUsers
 .\code\MFAMap.ps1 -AllUsers -Mode 5
@@ -126,7 +122,7 @@ Any user with no licence assigned is tagged **Unlicensed** next to their name, i
 
 # Demo — preview without credentials
 .\code\MFAMap.ps1 -Demo -Mode 1
-.\code\MFAMap.ps1 -Demo -Mode 5 -Branded
+.\code\MFAMap.ps1 -Demo -Mode 5
 ```
 
 ---
