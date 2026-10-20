@@ -81,6 +81,12 @@ Reports/
 
 The delta report shows who enrolled, who lapsed, progress bars comparing then vs now, and users who joined or left the group since the last snapshot.
 
+Runs with `-LicensedOnly` keep their own snapshot history and are only compared with other `-LicensedOnly` runs of the same group or tenant. Otherwise every unlicensed account would show up as having left.
+
+### Unlicensed accounts
+
+Any user with no licence assigned is tagged **Unlicensed** next to their name, in both the report and the delta report. Licence status is read from `assignedLicenses` and includes group-based licensing. Unlicensed accounts are included by default because an enabled account can still sign in, licence or not. Shared mailboxes, service accounts and leavers often turn up here. If one doesn't need to sign in, the usual fix is to block sign-in on it rather than register MFA. Once it's blocked, it drops out of the next `-AllUsers` run.
+
 ---
 
 ## Parameters
@@ -89,6 +95,7 @@ The delta report shows who enrolled, who lapsed, progress bars comparing then vs
 |---|---|---|
 | `-GroupId` | Yes (unless `-Demo` or `-AllUsers`) | Object ID of the target Entra group |
 | `-AllUsers` | No | Audit every enabled member user in the tenant instead of a single group (guests excluded). Cannot be combined with `-GroupId` |
+| `-LicensedOnly` | No | Only include users with at least one licence assigned. Works with `-AllUsers` or `-GroupId`. Without it, unlicensed accounts are included and tagged **Unlicensed** |
 | `-Mode` | No | Pass `1`–`5` to skip the interactive mode prompt |
 | `-OutputPath` | No | Set output path directly and skip the save dialog |
 | `-Branded` | No | Produce a REDACTED branded report |
@@ -112,6 +119,10 @@ The delta report shows who enrolled, who lapsed, progress bars comparing then vs
 # Tenant-wide — every enabled member user, no group required (guests excluded)
 .\code\MFAMap.ps1 -AllUsers
 .\code\MFAMap.ps1 -AllUsers -Mode 5
+
+# Licensed users only — leave out unlicensed accounts
+.\code\MFAMap.ps1 -AllUsers -LicensedOnly
+.\code\MFAMap.ps1 -GroupId "11223344-5566-7788-99aa-bbccddeeff00" -LicensedOnly
 
 # Demo — preview without credentials
 .\code\MFAMap.ps1 -Demo -Mode 1
@@ -144,6 +155,7 @@ Then launch with `pwsh` and follow the same steps. The save dialog uses `osascri
 | Sign-in window doesn't appear | Launched from embedded terminal | The sign-in window may be behind other windows — check the taskbar |
 | Save dialog doesn't appear | Headless or restricted environment | Script falls back to auto-naming in the current directory |
 | Delta report not generated | No previous snapshot found in the output folder | A delta only generates when a matching `.json` snapshot exists in the same directory |
+| No delta on first `-LicensedOnly` run | Licensed-only runs keep a separate snapshot history | Expected — the delta appears from the second `-LicensedOnly` run onwards |
 
 **Module cleanup:**
 
